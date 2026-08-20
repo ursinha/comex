@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Data (raw API responses, datasets, the ~360 MB UN voting CSV): kept local
+data/
+
+# Private working material: notes, study files, article, figures, HTML pages
+NOTAS.md
+estudo_*
+artigo/
+figuras/
+R/
+/*.html
