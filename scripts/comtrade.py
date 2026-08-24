@@ -48,9 +48,13 @@ REPORTERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/Reporters.jso
 REPORTERS_CACHE = "comtrade_reporters.json"
 PARTNERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/partnerAreas.json"
 PARTNERS_CACHE = "comtrade_partners.json"
-MODE_GROUPS = {  # motCode prefix -> label
-    "1": "air", "2": "water", "3": "land", "9": "other"}
-MODE_LABELS = {"2100": "sea", "2200": "inland waterway", "3100": "rail", "3200": "road",
+# Comtrade motCode is hierarchical: 1000 air; 2000 water (2100 sea, 2200 inland
+# waterway, 2900 water n.e.c.); 3000 land (3100 rail, 3200 road, 3900 land
+# n.e.c.); 9000 other (9100 pipelines and cables). Reporters sometimes use the
+# generic parent code (e.g. 2000) without specifying the child.
+MODE_LABELS = {"1000": "air", "2000": "water (unspecified)", "2100": "sea",
+               "2200": "inland waterway", "2900": "water n.e.c.", "3000": "land (unspecified)",
+               "3100": "rail", "3200": "road", "3900": "land n.e.c.", "9000": "other",
                "9100": "pipeline"}
 RETRIES = 4
 
@@ -138,7 +142,7 @@ def mode_breakdown(code, year, hs, flow, partner_code, key):
         mc = str(r["motCode"])
         if mc == "0":
             continue
-        label = MODE_LABELS.get(mc) or MODE_GROUPS.get(mc[0], "other")
+        label = MODE_LABELS.get(mc, f"mode {mc}")
         modes[label] = modes.get(label, 0) + r["primaryValue"]
     return modes, total
 
