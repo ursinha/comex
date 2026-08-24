@@ -9,7 +9,7 @@ Source: World Bank Indicators API (World Development Indicators), v2.
 
 Usage:
   python3 scripts/worldbank.py --countries CHN,USA,MEX --years 2024:2025
-  python3 scripts/worldbank.py --countries CHN,USA,MEX --years 2025 --sort value
+  python3 scripts/worldbank.py --countries CHN,USA,MEX --years 2025 --sort name   # alphabetical
   python3 scripts/worldbank.py --countries BRA --indicator SP.POP.TOTL --years 2020:2025 \
       --out data/population.csv
 
@@ -32,8 +32,8 @@ def main():
                     help="indicator code (default NY.GDP.MKTP.CD = GDP, current US$)")
     ap.add_argument("--years", required=True, help="year or range, e.g. 2025 or 2020:2025")
     ap.add_argument("--out", default=None, help="output CSV path (default data/wb_<indicator>.csv)")
-    ap.add_argument("--sort", default="name", choices=["name", "value"],
-                    help="order rows by country name (default) or by value, largest first")
+    ap.add_argument("--sort", default="value", choices=["value", "name"],
+                    help="order rows by value, largest first (default), or by country name")
     a = ap.parse_args()
 
     codes = ";".join(c.strip().upper() for c in a.countries.split(",") if c.strip())
