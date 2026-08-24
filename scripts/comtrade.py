@@ -65,8 +65,12 @@ def fetch(url, key=None):
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < RETRIES - 1:
-                wait = 15 * (2 ** attempt)
-                print(f"rate limited (429), retrying in {wait}s...", file=sys.stderr)
+                # Honour the server's Retry-After header when present; otherwise back off
+                retry_after = e.headers.get("Retry-After")
+                wait = int(retry_after) if retry_after and retry_after.isdigit() else 15 * (2 ** attempt)
+                body = e.read().decode(errors="replace").strip()[:200]
+                print(f"HTTP 429 (server says: {body or 'no message'}); retrying in {wait}s...",
+                      file=sys.stderr)
                 time.sleep(wait)
             else:
                 raise
