@@ -22,10 +22,11 @@ python3 -m venv .venv
 ```
 
 UN Comtrade works without a key (public preview endpoint: 500 unsorted rows
-per query, rate-limited). A free subscription key from
-[comtradeplus.un.org](https://comtradeplus.un.org) lifts those limits; pass it
-with `--key`, the `COMTRADE_API_KEY` environment variable, or a `.comtrade_key`
-file in the working directory (git-ignored).
+per query, rate-limited; the scripts retry on HTTP 429 and `top_products.py`
+works around the row cap). Subscription keys are currently issued only to
+premium (paid/institutional) subscribers; if you have one, pass it with
+`--key`, the `COMTRADE_API_KEY` environment variable, or a `.comtrade_key`
+file in the working directory (git-ignored) and the full endpoint is used.
 
 ## Examples
 
