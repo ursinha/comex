@@ -13,3 +13,6 @@ artigo/
 figuras/
 R/
 /*.html
+
+# Comtrade API key (never commit)
+.comtrade_key

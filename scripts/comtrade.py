@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """Query the UN Comtrade public API: annual trade by partner country.
 
-Source: UN Comtrade (United Nations Statistics Division), public "preview"
-endpoint:
-  https://comtradeapi.un.org/public/v1/preview/C/A/HS
-  - no API key required; limited to 500 records per query and rate-limited
-    (HTTP 429 when queried too often — this script retries with backoff)
+Source: UN Comtrade (United Nations Statistics Division).
+  - Without an API key, the public "preview" endpoint is used:
+      https://comtradeapi.un.org/public/v1/preview/C/A/HS
+    limited to 500 records per query, unsorted, and rate-limited (HTTP 429;
+    this script retries with backoff).
+  - With a free subscription key (register at https://comtradeplus.un.org),
+    the full endpoint is used instead, returning up to 100k records per call:
+      https://comtradeapi.un.org/data/v1/get/C/A/HS
+    The key is read from --key, the COMTRADE_API_KEY environment variable, or
+    a file named .comtrade_key in the current directory (keep it out of git).
   - values in US$ FOB (exports) / CIF (imports), field `primaryValue`
   Developer docs: https://comtradedeveloper.un.org
   Manual cross-check UI: https://comtradeplus.un.org
@@ -29,15 +34,31 @@ import time
 import urllib.error
 import urllib.request
 
-BASE = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
+PREVIEW = "https://comtradeapi.un.org/public/v1/preview/C/A/HS"
+FULL = "https://comtradeapi.un.org/data/v1/get/C/A/HS"
+KEY_FILE = ".comtrade_key"
 REPORTERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/Reporters.json"
 REPORTERS_CACHE = "comtrade_reporters.json"
 RETRIES = 4
 
 
-def fetch(url):
+def get_key(explicit=None):
+    """Return the API key from --key, the environment or .comtrade_key, else None."""
+    if explicit:
+        return explicit
+    if os.environ.get("COMTRADE_API_KEY"):
+        return os.environ["COMTRADE_API_KEY"]
+    if os.path.exists(KEY_FILE):
+        return open(KEY_FILE).read().strip() or None
+    return None
+
+
+def fetch(url, key=None):
     """GET a JSON URL, retrying with exponential backoff on HTTP 429."""
-    req = urllib.request.Request(url, headers={"User-Agent": "comex-tools/1.0"})
+    headers = {"User-Agent": "comex-tools/1.0"}
+    if key:
+        headers["Ocp-Apim-Subscription-Key"] = key
+    req = urllib.request.Request(url, headers=headers)
     for attempt in range(RETRIES):
         try:
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -49,6 +70,12 @@ def fetch(url):
                 time.sleep(wait)
             else:
                 raise
+
+
+def query(params, key=None):
+    """Run a trade query; uses the full endpoint when a key is available."""
+    qs = "&".join(f"{k}={v}" for k, v in params.items())
+    return fetch(f"{FULL if key else PREVIEW}?{qs}", key)
 
 
 def resolve_country(country, out_dir):
@@ -77,14 +104,15 @@ def main():
                     help="X = exports, M = imports (default X)")
     ap.add_argument("--top", type=int, default=15, help="how many partners to list")
     ap.add_argument("--out-dir", default="data", help="directory for raw JSON output (default data/)")
+    ap.add_argument("--key", default=None, help="Comtrade subscription key (optional)")
     a = ap.parse_args()
 
+    key = get_key(a.key)
     os.makedirs(a.out_dir, exist_ok=True)
     code, iso3 = resolve_country(a.country, a.out_dir)
-    url = (f"{BASE}?reporterCode={code}&period={a.year}&cmdCode={a.hs}"
-           f"&flowCode={a.flow}&partner2Code=0&motCode=0&customsCode=C00"
-           f"&includeDesc=true")
-    d = fetch(url)
+    d = query({"reporterCode": code, "period": a.year, "cmdCode": a.hs,
+               "flowCode": a.flow, "partnerCode": "", "partner2Code": 0,
+               "motCode": 0, "customsCode": "C00", "includeDesc": "true"}, key)
 
     out = os.path.join(a.out_dir, f"comtrade_{a.hs}_{a.year}_{iso3}_{a.flow}.json")
     json.dump(d, open(out, "w"))

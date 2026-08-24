@@ -8,6 +8,7 @@ data source in the module docstring.
 | Script | What it does | Source |
 |---|---|---|
 | `scripts/comtrade.py` | Annual trade of a product (HS6) by partner country, for any reporter country, year and flow (exports/imports) | [UN Comtrade](https://comtradeplus.un.org) public API |
+| `scripts/top_products.py` | Top N traded products (HS6) of any country, year and flow — single query with an API key, pruned drill-down over the HS hierarchy without one | [UN Comtrade](https://comtradeplus.un.org) |
 | `scripts/comexstat.py` | Brazilian trade of a product (NCM) broken down by state or partner country | [Comex Stat / MDIC](https://comexstat.mdic.gov.br) API |
 | `scripts/worldbank.py` | Any World Bank indicator (GDP by default) for a set of countries and years | [World Bank Indicators API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) |
 | `scripts/sea_routes.py` | Sea-route distance and transit time from an origin port to a list of ports | [searoute](https://github.com/genthalili/searoute-py) (Marnet shipping lanes) |
@@ -20,11 +21,20 @@ python3 -m venv .venv
 .venv/bin/pip install searoute   # only needed by sea_routes.py
 ```
 
+UN Comtrade works without a key (public preview endpoint: 500 unsorted rows
+per query, rate-limited). A free subscription key from
+[comtradeplus.un.org](https://comtradeplus.un.org) lifts those limits; pass it
+with `--key`, the `COMTRADE_API_KEY` environment variable, or a `.comtrade_key`
+file in the working directory (git-ignored).
+
 ## Examples
 
 ```bash
 # Exports of HS 100590 (maize) reported by Brazil in 2025, top 20 partners
 python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top 20
+
+# Top 10 export products of Argentina in 2024 (any country works)
+python3 scripts/top_products.py --country ARG --year 2024 --flow X --top 10
 
 # Brazilian exports of an NCM product by state of origin
 python3 scripts/comexstat.py --ncm 10059010 --year 2025 --flow export --by state
