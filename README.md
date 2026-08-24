@@ -7,7 +7,7 @@ data source in the module docstring.
 
 | Script | What it does | Source |
 |---|---|---|
-| `scripts/comtrade.py` | Annual trade of a product (HS6) by partner country, for any reporter country, year and flow (exports/imports) | [UN Comtrade](https://comtradeplus.un.org) public API |
+| `scripts/comtrade.py` | Annual trade of a product (HS6) by partner country, for any reporter country, year and flow (exports/imports); optional mode-of-transport breakdown per partner | [UN Comtrade](https://comtradeplus.un.org) public API |
 | `scripts/top_products.py` | Top N traded products (HS6) of any country, year and flow — single query with an API key, pruned drill-down over the HS hierarchy without one | [UN Comtrade](https://comtradeplus.un.org) |
 | `scripts/comexstat.py` | Brazilian trade of a product (NCM) broken down by state or partner country | [Comex Stat / MDIC](https://comexstat.mdic.gov.br) API |
 | `scripts/worldbank.py` | Any World Bank indicator (GDP by default) for a set of countries and years | [World Bank Indicators API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) |
@@ -33,6 +33,11 @@ file in the working directory (git-ignored) and the full endpoint is used.
 ```bash
 # Exports of HS 100590 (maize) reported by Brazil in 2025, top 20 partners
 python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top 20
+
+# Same, with the mode of transport (sea/road/rail/air) of each top partner,
+# or for a single partner
+python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top 10 --mode
+python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --partner ARG --mode
 
 # Top 10 export products of Argentina in 2024 (any country works)
 python3 scripts/top_products.py --country ARG --year 2024 --flow X --top 10

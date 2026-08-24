@@ -18,6 +18,13 @@ Source: UN Comtrade (United Nations Statistics Division).
 Usage:
   python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X
   python3 scripts/comtrade.py --hs 870380 --year 2025 --country 76 --flow M --top 15
+  # mode of transport (sea/road/rail/air/...) for each of the top partners,
+  # one extra query per partner; or for a single partner with --partner:
+  python3 scripts/comtrade.py --hs 020230 --year 2025 --country BRA --flow X --top 10 --mode
+  python3 scripts/comtrade.py --hs 020230 --year 2025 --country BRA --flow X --partner CHL --mode
+
+  Mode of transport (Comtrade motCode) is reported by many, but not all,
+  countries; when the reporter does not break it down, the table shows "n/a".
 
   --country accepts an M49 numeric code (76 = Brazil) or ISO3 (BRA); the
   reporter list is downloaded from the API on first run and cached in
@@ -39,6 +46,12 @@ FULL = "https://comtradeapi.un.org/data/v1/get/C/A/HS"
 KEY_FILE = ".comtrade_key"
 REPORTERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/Reporters.json"
 REPORTERS_CACHE = "comtrade_reporters.json"
+PARTNERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/partnerAreas.json"
+PARTNERS_CACHE = "comtrade_partners.json"
+MODE_GROUPS = {  # motCode prefix -> label
+    "1": "air", "2": "water", "3": "land", "9": "other"}
+MODE_LABELS = {"2100": "sea", "2200": "inland waterway", "3100": "rail", "3200": "road",
+               "9100": "pipeline"}
 RETRIES = 4
 
 
@@ -99,6 +112,45 @@ def resolve_country(country, out_dir):
     sys.exit(f"Country '{country}' not found (use ISO3 or an M49 numeric code).")
 
 
+def resolve_partner(partner, out_dir):
+    """Accept an M49 code or ISO3 for a partner area; return (code, iso3)."""
+    cache = os.path.join(out_dir, PARTNERS_CACHE)
+    if not os.path.exists(cache):
+        json.dump(fetch(PARTNERS_URL), open(cache, "w"))
+    partners = json.load(open(cache))["results"]
+    for r in partners:
+        if (partner.isdigit() and str(r["id"]) == partner) or \
+           r.get("PartnerCodeIsoAlpha3", "").upper() == partner.upper():
+            return str(r["id"]), r.get("PartnerCodeIsoAlpha3", partner)
+    sys.exit(f"Partner '{partner}' not found (use ISO3 or an M49 numeric code).")
+
+
+def mode_breakdown(code, year, hs, flow, partner_code, key):
+    """Return {label: value} of the flow to one partner by mode of transport,
+    plus the reported total (None values when the reporter gives no breakdown)."""
+    d = query({"reporterCode": code, "period": year, "cmdCode": hs, "flowCode": flow,
+               "partnerCode": partner_code, "partner2Code": 0, "motCode": "",
+               "customsCode": "C00", "includeDesc": "true"}, key)
+    rows = [r for r in d.get("data", []) if r.get("primaryValue")]
+    total = next((r["primaryValue"] for r in rows if str(r["motCode"]) == "0"), None)
+    modes = {}
+    for r in rows:
+        mc = str(r["motCode"])
+        if mc == "0":
+            continue
+        label = MODE_LABELS.get(mc) or MODE_GROUPS.get(mc[0], "other")
+        modes[label] = modes.get(label, 0) + r["primaryValue"]
+    return modes, total
+
+
+def mode_line(modes, total):
+    """Format the modal shares as 'road 99.8% · sea 0.2%' (largest first)."""
+    if not modes or not total:
+        return "n/a (reporter gives no mode breakdown)"
+    parts = sorted(modes.items(), key=lambda kv: -kv[1])
+    return " · ".join(f"{k} {100*v/total:.1f}%" for k, v in parts if v / total >= 0.0005)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Annual trade by partner (UN Comtrade)")
     ap.add_argument("--hs", required=True, help="6-digit HS product code (e.g. 100590)")
@@ -109,13 +161,19 @@ def main():
     ap.add_argument("--top", type=int, default=15, help="how many partners to list")
     ap.add_argument("--out-dir", default="data", help="directory for raw JSON output (default data/)")
     ap.add_argument("--key", default=None, help="Comtrade subscription key (optional)")
+    ap.add_argument("--partner", default=None, help="restrict to one partner (ISO3 or M49)")
+    ap.add_argument("--mode", action="store_true",
+                    help="add the mode-of-transport breakdown (one extra query per partner)")
+    ap.add_argument("--pause", type=float, default=2.0,
+                    help="seconds between the extra --mode queries (default 2)")
     a = ap.parse_args()
 
     key = get_key(a.key)
     os.makedirs(a.out_dir, exist_ok=True)
     code, iso3 = resolve_country(a.country, a.out_dir)
+    partner_code = resolve_partner(a.partner, a.out_dir)[0] if a.partner else ""
     d = query({"reporterCode": code, "period": a.year, "cmdCode": a.hs,
-               "flowCode": a.flow, "partnerCode": "", "partner2Code": 0,
+               "flowCode": a.flow, "partnerCode": partner_code, "partner2Code": 0,
                "motCode": 0, "customsCode": "C00", "includeDesc": "true"}, key)
 
     out = os.path.join(a.out_dir, f"comtrade_{a.hs}_{a.year}_{iso3}_{a.flow}.json")
@@ -124,20 +182,34 @@ def main():
     rows = [r for r in d.get("data", []) if r["partnerCode"] != 0 and r.get("primaryValue")]
     world = [r for r in d.get("data", []) if r["partnerCode"] == 0 and r.get("primaryValue")]
     if not rows and not world:
-        sys.exit(f"No data for HS {a.hs}, {a.year}, {iso3}, flow {a.flow}.")
-    total = world[0]["primaryValue"] if world else sum(r["primaryValue"] for r in rows)
+        sys.exit(f"No data for HS {a.hs}, {a.year}, {iso3}, flow {a.flow}"
+                 + (f", partner {a.partner}" if a.partner else "") + ".")
+    if a.partner:
+        total = sum(r["primaryValue"] for r in rows)   # share of the partner = 100%
+    else:
+        total = world[0]["primaryValue"] if world else sum(r["primaryValue"] for r in rows)
     desc = (world or rows)[0].get("cmdDesc", "")
     flow_name = "exports" if a.flow == "X" else "imports"
 
-    print(f"{iso3} — {flow_name} of HS {a.hs} in {a.year}")
+    print(f"{iso3} — {flow_name} of HS {a.hs} in {a.year}"
+          + (f" to/from {a.partner.upper()}" if a.partner else ""))
     print(f"Product: {desc}")
-    print(f"World total: US$ {total:,.0f} | {len(rows)} partners | raw: {out}\n")
+    print(f"{'Total' if a.partner else 'World total'}: US$ {total:,.0f} | "
+          f"{len(rows)} partners | raw: {out}\n")
     rows.sort(key=lambda r: -r["primaryValue"])
-    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}")
-    for i, r in enumerate(rows[: a.top], 1):
+    shown = rows[: a.top]
+    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}"
+          + ("   mode of transport" if a.mode else ""))
+    for i, r in enumerate(shown, 1):
         v = r["primaryValue"]
         name = r.get("partnerDesc") or r.get("partnerISO", "?")
-        print(f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%")
+        line = f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%"
+        if a.mode:
+            if i > 1:
+                time.sleep(a.pause)
+            modes, mtotal = mode_breakdown(code, a.year, a.hs, a.flow, r["partnerCode"], key)
+            line += "   " + mode_line(modes, mtotal or v)
+        print(line)
 
 
 if __name__ == "__main__":
