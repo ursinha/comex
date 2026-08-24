@@ -23,6 +23,8 @@ Usage:
       --origin BRSSZ --ports-out data/ports.csv
   # show the 3 best-connected ports of each country instead of only the first
   python3 scripts/main_ports.py --plsci data/plsci.csv --countries CHN,USA --top 3
+  # override the choice for a country (e.g. the main port on the Atlantic coast)
+  python3 scripts/main_ports.py --plsci data/plsci.7z --countries MEX,USA --choose MEX=MXVER
   # only look up coordinates for a list of UN/LOCODEs (no PLSCI needed)
   python3 scripts/main_ports.py --locodes BRSSZ,CNSHG,USNYC --ports-out data/ports.csv
 """
@@ -128,10 +130,17 @@ def main():
     ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
     ap.add_argument("--origin", help="UN/LOCODE of the origin port to add to the ports CSV")
     ap.add_argument("--ports-out", help="write a name,lon,lat CSV for sea_routes.py")
+    ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
+                    help="override the PLSCI choice for a country with a specific port, e.g. "
+                         "MEX=MXVER (its PLSCI rank in the country is shown)")
     ap.add_argument("--set", action="append", default=[], metavar="LOCODE=lon,lat",
                     help="manual coordinates for a LOCODE (repeatable), e.g. PHMNL=120.95,14.60")
     ap.add_argument("--out-dir", default="data")
     a = ap.parse_args()
+    chosen_ports = {}
+    for item in a.choose:
+        c3, k = item.split("=", 1)
+        chosen_ports[c3.upper()] = k.upper()
     overrides = {}
     for item in a.set:
         k, v = item.split("=", 1)
@@ -161,9 +170,20 @@ def main():
                 print(f"{c3}: no port in PLSCI file", file=sys.stderr)
                 continue
             for i, (v, k, lbl) in enumerate(ports[: a.top]):
-                if i == 0:
-                    chosen.append((c3, k, lbl, v))
                 print(f"{c3 if i == 0 else '':<5}{k:<8}{lbl:<36}PLSCI {v:8.2f}")
+            if c3 in chosen_ports:
+                want = chosen_ports[c3]
+                rank = next((i + 1 for i, (_, k, _) in enumerate(ports) if k == want), None)
+                if rank is None:
+                    print(f"{c3}: chosen port {want} not in PLSCI file, using it anyway", file=sys.stderr)
+                    chosen.append((c3, want, want, None))
+                else:
+                    v, k, lbl = ports[rank - 1]
+                    print(f"     -> chosen {k} {lbl} (rank {rank} of {len(ports)} in country, PLSCI {v:.2f})")
+                    chosen.append((c3, k, lbl, v))
+            else:
+                v, k, lbl = ports[0]
+                chosen.append((c3, k, lbl, v))
 
     if a.locodes:
         for k in [c.strip().upper() for c in a.locodes.split(",") if c.strip()]:
