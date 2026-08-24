@@ -52,9 +52,11 @@ python3 scripts/comexstat.py --year 2025 --flow export --by hs6 --top 10
 # GDP (current US$) for a few countries, 2020-2025
 python3 scripts/worldbank.py --countries ARG,CHL,URY --years 2020:2025
 
-# Ports CSV with official UN/LOCODE coordinates (or pick each country's main
-# port from a downloaded UNCTAD PLSCI file: --plsci data/plsci.csv --countries ...)
-python3 scripts/main_ports.py --locodes CNSHG,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
+# Main port of each country = highest UNCTAD PLSCI (bulk .7z downloaded from
+# the UNCTADstat page), with official UN/LOCODE coordinates, as a ports CSV
+python3 scripts/main_ports.py --plsci data/plsci.7z --countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
+# or just look up coordinates for known UN/LOCODEs
+python3 scripts/main_ports.py --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
 
 # Sea routes from a port listed in ports.csv (columns: name,lon,lat), 16 knots
 .venv/bin/python scripts/sea_routes.py --ports data/ports.csv --origin Santos --speed 16

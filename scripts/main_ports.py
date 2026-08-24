@@ -6,7 +6,9 @@ Sources:
   - UNCTADstat, Port Liner Shipping Connectivity Index (PLSCI), quarterly:
       https://unctadstat.unctad.org/datacentre/dataviewer/US.PLSCI
     The site offers no documented API: download the bulk file from the page
-    (the "bulk download" button next to "CSV") and pass it with --plsci.
+    (the "bulk download" button next to "CSV"; it comes as a .7z containing
+    US_PLSCI.csv) and pass it with --plsci (.7z, .zip or the extracted .csv;
+    .7z needs the `7z` command-line tool).
     Ports are identified by UN/LOCODE; the port with the highest PLSCI in a
     country is taken as its main port.
   - UN/LOCODE (UNECE), via the open mirror https://github.com/datasets/un-locode
@@ -69,7 +71,8 @@ def iso3_to_iso2(out_dir):
     if not os.path.exists(path):
         download(PARTNERS_URL, path)
     return {r["PartnerCodeIsoAlpha3"]: r["PartnerCodeIsoAlpha2"]
-            for r in json.load(open(path))["results"] if r.get("PartnerCodeIsoAlpha3")}
+            for r in json.load(open(path))["results"]
+            if r.get("PartnerCodeIsoAlpha3") and r.get("PartnerCodeIsoAlpha2")}
 
 
 def find_col(cols, *needles):
@@ -79,17 +82,31 @@ def find_col(cols, *needles):
     return None
 
 
+def open_plsci(path):
+    """Return a text stream for the PLSCI CSV, extracting .7z/.zip bulk files."""
+    import io, subprocess, zipfile
+    if path.lower().endswith(".zip"):
+        z = zipfile.ZipFile(path)
+        name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
+        return io.TextIOWrapper(z.open(name), encoding="utf-8-sig", newline="")
+    if path.lower().endswith(".7z"):
+        out = subprocess.run(["7z", "e", "-so", path], capture_output=True, check=True).stdout
+        return io.StringIO(out.decode("utf-8-sig"))
+    return open(path, newline="", encoding="utf-8-sig")
+
+
 def read_plsci(path):
     """Return {locode: (port_label, value)} for the latest period in the file.
     Column names are located by keyword so that both the bulk and the
     'download CSV' layouts of UNCTADstat work; override with --col-* if needed."""
-    with open(path, newline="", encoding="utf-8-sig") as f:
+    with open_plsci(path) as f:
         rows = list(csv.DictReader(f))
     cols = rows[0].keys()
     c_port = find_col(cols, "port") if not find_col(cols, "port", "label") else find_col(cols, "port", "label")
     c_code = next((c for c in cols if c.lower() in ("port", "port_code", "locode")), None)
     c_time = find_col(cols, "quarter") or find_col(cols, "year") or find_col(cols, "period")
-    c_val = find_col(cols, "value") or find_col(cols, "index")
+    c_val = next((c for c in cols if ("index" in c.lower() or "value" in c.lower())
+                  and not any(x in c.lower() for x in ("footnote", "missing", "label"))), None)
     if not (c_code and c_time and c_val):
         sys.exit(f"could not identify columns in {path}: {list(cols)}")
     latest = max(r[c_time] for r in rows if r.get(c_val))
@@ -111,8 +128,15 @@ def main():
     ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
     ap.add_argument("--origin", help="UN/LOCODE of the origin port to add to the ports CSV")
     ap.add_argument("--ports-out", help="write a name,lon,lat CSV for sea_routes.py")
+    ap.add_argument("--set", action="append", default=[], metavar="LOCODE=lon,lat",
+                    help="manual coordinates for a LOCODE (repeatable), e.g. PHMNL=120.95,14.60")
     ap.add_argument("--out-dir", default="data")
     a = ap.parse_args()
+    overrides = {}
+    for item in a.set:
+        k, v = item.split("=", 1)
+        lon, lat = (float(x) for x in v.split(","))
+        overrides[k.upper()] = (lon, lat)
     if not a.plsci and not a.locodes:
         ap.error("give --plsci with --countries, or --locodes")
 
@@ -150,16 +174,35 @@ def main():
         r = locodes.get(a.origin.upper())
         chosen.insert(0, (a.origin[:2].upper(), a.origin.upper(), r["Name"] if r else a.origin, None))
 
-    print(f"\n{'country':<8}{'locode':<8}{'port':<36}{'lon':>10}{'lat':>9}")
+    print(f"\n{'country':<8}{'locode':<8}{'port':<36}{'lon':>10}{'lat':>9}  source")
     rows_out = []
     for c, k, name, v in chosen:
         r = locodes.get(k)
-        coords = parse_coords(r["Coordinates"]) if r else None
-        if coords:
-            rows_out.append((name, coords[0], coords[1]))
-            print(f"{c:<8}{k:<8}{name[:34]:<36}{coords[0]:>10.3f}{coords[1]:>9.3f}")
+        coords, src = None, ""
+        if k in overrides:
+            coords, src = overrides[k], "manual (--set)"
+        elif r and parse_coords(r["Coordinates"]):
+            coords, src = parse_coords(r["Coordinates"]), "UN/LOCODE"
         else:
-            print(f"{c:<8}{k:<8}{name[:34]:<36}{'no coordinates in UN/LOCODE':>19}")
+            # Fallback: another UN/LOCODE entry of the same country whose name
+            # contains the port's name and that has coordinates (e.g. CNSHG
+            # "Shanghai Pt" when CNSHA has none)
+            # The PLSCI label ("Country, Port") is a better search key than the
+            # LOCODE entry's own name (CNSHA is Hongqiao airport in UN/LOCODE).
+            base = name.split(",")[-1].split("(")[0].strip().lower()
+            cands = [(k2, r2) for k2, r2 in locodes.items()
+                     if k2[:2] == k[:2] and base in r2["Name"].lower()
+                     and r2["Function"].startswith("1") and parse_coords(r2["Coordinates"])]
+            cands.sort(key=lambda kr: (kr[1]["Name"].lower() != base, len(kr[1]["Name"])))
+            if cands:
+                k2, r2 = cands[0]
+                coords, src = parse_coords(r2["Coordinates"]), f"UN/LOCODE {k2} ({r2['Name']})"
+        short = name.split(",")[-1].strip() if "," in name else name
+        if coords:
+            rows_out.append((short, round(coords[0], 3), round(coords[1], 3)))
+            print(f"{c:<8}{k:<8}{short[:34]:<36}{coords[0]:>10.3f}{coords[1]:>9.3f}  {src}")
+        else:
+            print(f"{c:<8}{k:<8}{short[:34]:<36}{'NO COORDINATES — use --set':>19}")
 
     if a.ports_out:
         with open(a.ports_out, "w", newline="") as f:
