@@ -29,6 +29,9 @@ python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top
 # Brazilian exports of an NCM product by state of origin
 python3 scripts/comexstat.py --ncm 10059010 --year 2025 --flow export --by state
 
+# Top 10 Brazilian export products in 2025, NCM lines aggregated to 6-digit HS
+python3 scripts/comexstat.py --year 2025 --flow export --by hs6 --top 10
+
 # GDP (current US$) for a few countries, 2020-2025
 python3 scripts/worldbank.py --countries ARG,CHL,URY --years 2020:2025
 

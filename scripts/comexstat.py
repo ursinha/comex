@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Query Comex Stat (Brazilian official trade statistics, MDIC): annual trade
-by NCM product, broken down by Brazilian state and/or partner country.
+broken down by Brazilian state, partner country or product (NCM / HS6).
 
 Source: Comex Stat API (Ministério do Desenvolvimento, Indústria, Comércio e
 Serviços), endpoint POST https://api-comexstat.mdic.gov.br/general
@@ -13,63 +13,105 @@ Usage:
   python3 scripts/comexstat.py --ncm 02023000 --year 2025 --flow export --by state
   python3 scripts/comexstat.py --ncm 02023000 --year 2025 --flow export --by state --country 158
   python3 scripts/comexstat.py --ncm 87038000 --year 2025 --flow import --by country --top 10
+  # top products (all NCMs aggregated to 6-digit HS; --ncm not needed):
+  python3 scripts/comexstat.py --year 2025 --flow export --by hs6 --top 10
+  python3 scripts/comexstat.py --year 2025 --flow export --by ncm --country 158
 
-Output: CSV (default data/comexstat_<ncm>_<year>_<flow>_<by>.csv) and a
-ranking printed to the terminal.
+Output: CSV (default data/comexstat_<ncm|all>_<year>_<flow>_<by>.csv) and a
+ranking printed to the terminal. For --by hs6 the description shown is that of
+the largest NCM line within each HS6 group.
 """
 import argparse
 import csv
 import json
 import os
+import sys
+import time
+import urllib.error
 import urllib.request
 
 URL = "https://api-comexstat.mdic.gov.br/general"
+RETRIES = 4
+
+
+def post(body):
+    """POST a JSON body, retrying with exponential backoff on HTTP 429."""
+    req = urllib.request.Request(URL, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": "comex-tools/1.0"})
+    for attempt in range(RETRIES):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < RETRIES - 1:
+                wait = 20 * (2 ** attempt)
+                print(f"rate limited (429), retrying in {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+            else:
+                raise
 
 
 def main():
     ap = argparse.ArgumentParser(description="Comex Stat (MDIC) trade by state/country")
-    ap.add_argument("--ncm", required=True, help="8-digit NCM code (e.g. 02023000)")
+    ap.add_argument("--ncm", default=None, help="8-digit NCM code (e.g. 02023000); optional for --by ncm/hs6")
     ap.add_argument("--year", required=True, help="year (e.g. 2025)")
     ap.add_argument("--flow", default="export", choices=["export", "import"])
-    ap.add_argument("--by", default="state", choices=["state", "country"],
-                    help="breakdown dimension (default state)")
+    ap.add_argument("--by", default="state", choices=["state", "country", "ncm", "hs6"],
+                    help="breakdown dimension (default state); hs6 aggregates NCM lines to 6 digits")
     ap.add_argument("--country", default=None, help="MDIC numeric country code to filter by")
     ap.add_argument("--top", type=int, default=15, help="rows to print")
     ap.add_argument("--out", default=None, help="output CSV path")
     a = ap.parse_args()
 
-    filters = [{"filter": "ncm", "values": [a.ncm]}]
+    if a.by in ("state", "country") and not a.ncm:
+        raise SystemExit("--ncm is required for --by state/country")
+    filters = [{"filter": "ncm", "values": [a.ncm]}] if a.ncm else []
     if a.country:
         filters.append({"filter": "country", "values": [int(a.country)]})
     body = {"flow": a.flow, "monthDetail": False,
             "period": {"from": f"{a.year}-01", "to": f"{a.year}-12"},
-            "filters": filters, "details": [a.by], "metrics": ["metricFOB"]}
-    req = urllib.request.Request(URL, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json",
-                                          "User-Agent": "comex-tools/1.0"})
-    with urllib.request.urlopen(req, timeout=90) as r:
-        rows = json.load(r)["data"]["list"]
+            "filters": filters, "details": ["ncm" if a.by == "hs6" else a.by],
+            "metrics": ["metricFOB"]}
+    rows = post(body)["data"]["list"]
     if not rows:
         raise SystemExit("No data returned (check NCM format: 8 digits as a string).")
 
-    rows.sort(key=lambda r: -float(r["metricFOB"]))
-    total = sum(float(r["metricFOB"]) for r in rows)
-    out = a.out or f"data/comexstat_{a.ncm}_{a.year}_{a.flow}_{a.by}.csv"
+    # Normalise to (key, label, value)
+    if a.by == "ncm":
+        items = [(r["coNcm"], r["ncm"], float(r["metricFOB"])) for r in rows]
+    elif a.by == "hs6":
+        groups = {}
+        for r in rows:
+            k, v = r["coNcm"][:6], float(r["metricFOB"])
+            g = groups.setdefault(k, {"value": 0.0, "top": (0.0, "")})
+            g["value"] += v
+            if v > g["top"][0]:
+                g["top"] = (v, r["ncm"])
+        items = [(k, g["top"][1], g["value"]) for k, g in groups.items()]
+    else:
+        items = [(r[a.by], r[a.by], float(r["metricFOB"])) for r in rows]
+
+    items.sort(key=lambda t: -t[2])
+    total = sum(t[2] for t in items)
+    out = a.out or f"data/comexstat_{a.ncm or 'all'}_{a.year}_{a.flow}_{a.by}.csv"
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow([a.by, "fob_usd"])
-        for r in rows:
-            w.writerow([r[a.by], r["metricFOB"]])
+        w.writerow([a.by, "description", "fob_usd"])
+        for k, label, v in items:
+            w.writerow([k, label, f"{v:.0f}"])
 
     label = "exports" if a.flow == "export" else "imports"
-    print(f"Brazil — {label} of NCM {a.ncm} in {a.year} by {a.by}"
+    print(f"Brazil — {label}" + (f" of NCM {a.ncm}" if a.ncm else "") + f" in {a.year} by {a.by}"
           + (f" (country {a.country})" if a.country else ""))
-    print(f"Total: US$ {total:,.0f} | {len(rows)} rows\n")
-    print(f"{'#':<4}{a.by:<28}{'US$ 1000':>14}{'%':>7}")
-    for i, r in enumerate(rows[: a.top], 1):
-        v = float(r["metricFOB"])
-        print(f"{i:<4}{r[a.by]:<28}{v/1000:>14,.1f}{100*v/total:>6.1f}%")
+    print(f"Total: US$ {total:,.0f} | {len(items)} rows\n")
+    wide = a.by in ("ncm", "hs6")
+    head = f"{'#':<4}" + (f"{'code':<10}" if wide else "") + f"{('description' if wide else a.by):<44}"
+    print(head + f"{'US$ 1000':>16}{'%':>7}")
+    for i, (k, desc, v) in enumerate(items[: a.top], 1):
+        line = f"{i:<4}" + (f"{k:<10}" if wide else "") + f"{desc[:42]:<44}"
+        print(line + f"{v/1000:>16,.1f}{100*v/total:>6.1f}%")
     print(f"\nSaved to {out}")
 
 
