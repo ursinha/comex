@@ -192,8 +192,10 @@ def main():
             base = name.split(",")[-1].split("(")[0].strip().lower()
             cands = [(k2, r2) for k2, r2 in locodes.items()
                      if k2[:2] == k[:2] and base in r2["Name"].lower()
-                     and r2["Function"].startswith("1") and parse_coords(r2["Coordinates"])]
-            cands.sort(key=lambda kr: (kr[1]["Name"].lower() != base, len(kr[1]["Name"])))
+                     and parse_coords(r2["Coordinates"])]
+            # prefer entries flagged as ports (function 1), then exact names, then short names
+            cands.sort(key=lambda kr: (not kr[1]["Function"].startswith("1"),
+                                       kr[1]["Name"].lower() != base, len(kr[1]["Name"])))
             if cands:
                 k2, r2 = cands[0]
                 coords, src = parse_coords(r2["Coordinates"]), f"UN/LOCODE {k2} ({r2['Name']})"
