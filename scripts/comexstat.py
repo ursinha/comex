@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Query Comex Stat (Brazilian official trade statistics, MDIC): annual trade
-broken down by Brazilian state, partner country or product (NCM / HS6).
+broken down by Brazilian state, partner country, product (NCM / HS6), customs
+unit of clearance (URF — usually the port of shipment) or transport mode.
 
 Source: Comex Stat API (Ministério do Desenvolvimento, Indústria, Comércio e
 Serviços), endpoint POST https://api-comexstat.mdic.gov.br/general
@@ -16,6 +17,9 @@ Usage:
   # top products (all NCMs aggregated to 6-digit HS; --ncm not needed):
   python3 scripts/comexstat.py --year 2025 --flow export --by hs6 --top 10
   python3 scripts/comexstat.py --year 2025 --flow export --by ncm --country 158
+  # where a product is shipped from (customs unit ~ port) and by which mode:
+  python3 scripts/comexstat.py --ncm 27090010 --year 2025 --flow export --by urf
+  python3 scripts/comexstat.py --ncm 27090010 --year 2025 --flow export --by via
 
 Output: CSV (default data/comexstat_<ncm|all>_<year>_<flow>_<by>.csv) and a
 ranking printed to the terminal. For --by hs6 the description shown is that of
@@ -57,15 +61,17 @@ def main():
     ap.add_argument("--ncm", default=None, help="8-digit NCM code (e.g. 02023000); optional for --by ncm/hs6")
     ap.add_argument("--year", required=True, help="year (e.g. 2025)")
     ap.add_argument("--flow", default="export", choices=["export", "import"])
-    ap.add_argument("--by", default="state", choices=["state", "country", "ncm", "hs6"],
-                    help="breakdown dimension (default state); hs6 aggregates NCM lines to 6 digits")
+    ap.add_argument("--by", default="state",
+                    choices=["state", "country", "ncm", "hs6", "urf", "via"],
+                    help="breakdown dimension (default state); hs6 aggregates NCM lines to "
+                         "6 digits; urf = customs unit (port) of clearance; via = transport mode")
     ap.add_argument("--country", default=None, help="MDIC numeric country code to filter by")
     ap.add_argument("--top", type=int, default=15, help="rows to print")
     ap.add_argument("--out", default=None, help="output CSV path")
     a = ap.parse_args()
 
-    if a.by in ("state", "country") and not a.ncm:
-        raise SystemExit("--ncm is required for --by state/country")
+    if a.by in ("state", "country", "urf", "via") and not a.ncm:
+        raise SystemExit(f"--ncm is required for --by {a.by}")
     filters = [{"filter": "ncm", "values": [a.ncm]}] if a.ncm else []
     if a.country:
         filters.append({"filter": "country", "values": [int(a.country)]})
