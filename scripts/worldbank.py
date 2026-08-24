@@ -9,6 +9,7 @@ Source: World Bank Indicators API (World Development Indicators), v2.
 
 Usage:
   python3 scripts/worldbank.py --countries CHN,USA,MEX --years 2024:2025
+  python3 scripts/worldbank.py --countries CHN,USA,MEX --years 2025 --sort value
   python3 scripts/worldbank.py --countries BRA --indicator SP.POP.TOTL --years 2020:2025 \
       --out data/population.csv
 
@@ -31,6 +32,8 @@ def main():
                     help="indicator code (default NY.GDP.MKTP.CD = GDP, current US$)")
     ap.add_argument("--years", required=True, help="year or range, e.g. 2025 or 2020:2025")
     ap.add_argument("--out", default=None, help="output CSV path (default data/wb_<indicator>.csv)")
+    ap.add_argument("--sort", default="name", choices=["name", "value"],
+                    help="order rows by country name (default) or by value, largest first")
     a = ap.parse_args()
 
     codes = ";".join(c.strip().upper() for c in a.countries.split(",") if c.strip())
@@ -46,7 +49,10 @@ def main():
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     json.dump(payload, open(out.rsplit(".", 1)[0] + "_raw.json", "w"))
 
-    rows = sorted(payload[1], key=lambda r: (r["country"]["value"], r["date"]))
+    if a.sort == "value":
+        rows = sorted(payload[1], key=lambda r: (r["date"], -(r["value"] or 0)))
+    else:
+        rows = sorted(payload[1], key=lambda r: (r["country"]["value"], r["date"]))
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["country", "iso3", "year", "value"])
