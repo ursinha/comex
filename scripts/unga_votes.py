@@ -70,7 +70,7 @@ def main():
                     help="comma-separated ISO3 codes to compare with the base country (not needed with --list)")
     ap.add_argument("--resolutions", default="",
                     help="comma-separated resolution symbols to highlight (optional)")
-    ap.add_argument("--out", default=None, help="output CSV path")
+    ap.add_argument("--out", default=None, help="output CSV path (with --list: the listed resolutions)")
     ap.add_argument("--list", action="store_true",
                     help="only list the resolutions voted in the year (or range) and exit")
     ap.add_argument("--filter", default="",
@@ -98,13 +98,17 @@ def main():
                 by_year[y][r["resolution"]][r["ms_code"]] = r["ms_vote"] or "-"
 
     if a.list:
-        shown = 0
-        for res, (date, title) in sorted(titles.items(), key=lambda x: x[1][0]):
-            if a.filter and a.filter.lower() not in title.lower():
-                continue
+        listed = [(date, res, title) for res, (date, title) in sorted(titles.items(), key=lambda x: x[1][0])
+                  if not a.filter or a.filter.lower() in title.lower()]
+        for date, res, title in listed:
             print(f"{date}  {res:<18} {title[:100]}")
-            shown += 1
-        print(f"\n{shown} of {len(titles)} resolutions with recorded votes in {a.year}")
+        print(f"\n{len(listed)} of {len(titles)} resolutions with recorded votes in {a.year}")
+        if a.out:
+            with open(a.out, "w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["date", "resolution", "title"])
+                w.writerows(listed)
+            print(f"Saved to {a.out}")
         return
 
     base = a.base.upper()
