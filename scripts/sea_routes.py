@@ -9,8 +9,9 @@ https://www.searates.com/distance-time/
 
 Library: https://github.com/genthalili/searoute-py
 
-Input: a CSV with columns `name,lon,lat` listing the ports; the origin is
-selected by name with --origin.
+Input: a CSV with columns `name,lon,lat` listing the ports (extra columns
+such as `iso3` and `locode`, as written by main_ports.py, are carried over to
+the output); the origin is selected by name with --origin.
 
 Usage:
   python3 scripts/sea_routes.py --ports data/ports.csv --origin "Santos" \
@@ -39,7 +40,9 @@ def main():
     a = ap.parse_args()
 
     with open(a.ports, newline="") as f:
-        ports = {r["name"]: (float(r["lon"]), float(r["lat"])) for r in csv.DictReader(f)}
+        rows = list(csv.DictReader(f))
+    ports = {r["name"]: (float(r["lon"]), float(r["lat"])) for r in rows}
+    extra = {r["name"]: {k: v for k, v in r.items() if k not in ("name", "lon", "lat")} for r in rows}
     if a.origin not in ports:
         raise SystemExit(f"origin '{a.origin}' not found in {a.ports}")
     origin = ports[a.origin]
@@ -51,7 +54,7 @@ def main():
         route = sr.searoute(origin, coord, units="nm")
         nm = route["properties"]["length"]
         hours = nm / a.speed
-        out[name] = {"nm": round(nm), "km": round(nm * NM_TO_KM),
+        out[name] = {**extra.get(name, {}), "nm": round(nm), "km": round(nm * NM_TO_KM),
                      "hours": round(hours), "days": round(hours / 24, 1)}
         print(f"{name:<28} {nm:>8,.0f} nm  {nm*NM_TO_KM:>9,.0f} km  ~{hours/24:>5.1f} days")
 
@@ -60,9 +63,10 @@ def main():
     out_csv = a.out.rsplit(".", 1)[0] + ".csv"
     with open(out_csv, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["port", "nm", "km", "hours", "days"])
+        extra_cols = [k for k in next(iter(extra.values()), {}) if k]
+        w.writerow(["port"] + extra_cols + ["nm", "km", "hours", "days"])
         for name, v in out.items():
-            w.writerow([name, v["nm"], v["km"], v["hours"], v["days"]])
+            w.writerow([name] + [v.get(k, "") for k in extra_cols] + [v["nm"], v["km"], v["hours"], v["days"]])
     print(f"\nSaved to {a.out} and {out_csv}")
 
 

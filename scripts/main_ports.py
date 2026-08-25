@@ -129,7 +129,7 @@ def main():
     ap.add_argument("--top", type=int, default=1, help="ports to show per country (default 1)")
     ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
     ap.add_argument("--origin", help="UN/LOCODE of the origin port to add to the ports CSV")
-    ap.add_argument("--ports-out", help="write a name,lon,lat CSV for sea_routes.py")
+    ap.add_argument("--ports-out", help="write a name,lon,lat,iso3,locode CSV for sea_routes.py")
     ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
                     help="override the PLSCI choice for a country with a specific port, e.g. "
                          "MEX=MXVER (its PLSCI rank in the country is shown)")
@@ -185,14 +185,16 @@ def main():
                 v, k, lbl = ports[0]
                 chosen.append((c3, k, lbl, v))
 
+    iso2_to_iso3 = {v: k for k, v in iso3_to_iso2(a.out_dir).items()}
     if a.locodes:
         for k in [c.strip().upper() for c in a.locodes.split(",") if c.strip()]:
             r = locodes.get(k)
-            chosen.append((k[:2], k, r["Name"] if r else k, None))
+            chosen.append((iso2_to_iso3.get(k[:2], k[:2]), k, r["Name"] if r else k, None))
 
     if a.origin:
-        r = locodes.get(a.origin.upper())
-        chosen.insert(0, (a.origin[:2].upper(), a.origin.upper(), r["Name"] if r else a.origin, None))
+        k = a.origin.upper()
+        r = locodes.get(k)
+        chosen.insert(0, (iso2_to_iso3.get(k[:2], k[:2]), k, r["Name"] if r else a.origin, None))
 
     print(f"\n{'country':<8}{'locode':<8}{'port':<36}{'lon':>10}{'lat':>9}  source")
     rows_out = []
@@ -221,7 +223,7 @@ def main():
                 coords, src = parse_coords(r2["Coordinates"]), f"UN/LOCODE {k2} ({r2['Name']})"
         short = name.split(",")[-1].strip() if "," in name else name
         if coords:
-            rows_out.append((short, round(coords[0], 3), round(coords[1], 3)))
+            rows_out.append((short, round(coords[0], 3), round(coords[1], 3), c, k))
             print(f"{c:<8}{k:<8}{short[:34]:<36}{coords[0]:>10.3f}{coords[1]:>9.3f}  {src}")
         else:
             print(f"{c:<8}{k:<8}{short[:34]:<36}{'NO COORDINATES — use --set':>19}")
@@ -229,7 +231,7 @@ def main():
     if a.ports_out:
         with open(a.ports_out, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["name", "lon", "lat"])
+            w.writerow(["name", "lon", "lat", "iso3", "locode"])
             w.writerows(rows_out)
         print(f"\nSaved {len(rows_out)} ports to {a.ports_out}")
 
