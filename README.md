@@ -59,7 +59,7 @@ python3 scripts/main_ports.py --plsci data/plsci.7z --countries ARG,CHL,URY --or
 python3 scripts/main_ports.py --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
 
 # Sea routes from a port listed in ports.csv (columns: name,lon,lat), 16 knots
-.venv/bin/python scripts/sea_routes.py --ports data/ports.csv --origin Santos --speed 16
+.venv/bin/python scripts/sea_routes.py --ports data/ports.csv --origin Santos --speed 16 --out data/sea_routes.csv
 
 # UNGA voting similarity in 2025 between Brazil and three other countries
 # (the ~360 MB voting CSV is downloaded from the UN Digital Library on first run)
@@ -67,5 +67,8 @@ python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG,CHL,URY --r
 python3 scripts/unga_votes.py --year 2022:2025 --list --filter Ukraine   # find resolution symbols
 ```
 
-Every script accepts `-h` for the full list of options. Outputs go to `data/`
-by default (raw API responses and CSVs), which is not versioned here.
+Every script accepts `-h` for the full list of options. Scripts print their
+result; those with `--out` write a CSV only when the flag is given.
+`comtrade.py` and `top_products.py` always keep the raw API responses (and a
+CSV) in `--out-dir` (default `data/`, not versioned here), together with the
+reference tables they cache.

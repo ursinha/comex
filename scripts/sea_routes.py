@@ -17,9 +17,9 @@ Usage:
   python3 scripts/sea_routes.py --ports data/ports.csv --origin "Santos" \
       --speed 16 --out data/sea_routes.json
 
-Output: JSON keyed by destination port name with nautical miles, km, hours
-and days at the given speed, plus a CSV with the same data (one row per
-port); a summary is printed to the terminal.
+Output: a summary printed to the terminal; with --out, a CSV (one row per
+port: nm, km, hours, days at the given speed) and, if the path ends in .json,
+also a JSON keyed by port name.
 """
 import argparse
 import csv
@@ -36,7 +36,8 @@ def main():
     ap.add_argument("--origin", required=True, help="name of the origin port (as in the CSV)")
     ap.add_argument("--speed", type=float, default=16.0,
                     help="service speed in knots (default 16, typical container liner)")
-    ap.add_argument("--out", default="data/sea_routes.json", help="output JSON path")
+    ap.add_argument("--out", default=None,
+                    help="write the results to this path: .csv, or .json (a .csv is written alongside); otherwise print only")
     a = ap.parse_args()
 
     with open(a.ports, newline="") as f:
@@ -58,8 +59,11 @@ def main():
                      "hours": round(hours), "days": round(hours / 24, 1)}
         print(f"{name:<28} {nm:>8,.0f} nm  {nm*NM_TO_KM:>9,.0f} km  ~{hours/24:>5.1f} days")
 
-    with open(a.out, "w") as f:
-        json.dump(out, f, ensure_ascii=False, indent=1)
+    if not a.out:
+        return
+    if a.out.lower().endswith(".json"):
+        with open(a.out, "w") as f:
+            json.dump(out, f, ensure_ascii=False, indent=1)
     out_csv = a.out.rsplit(".", 1)[0] + ".csv"
     with open(out_csv, "w", newline="") as f:
         w = csv.writer(f)
@@ -67,7 +71,7 @@ def main():
         w.writerow(["port"] + extra_cols + ["nm", "km", "hours", "days"])
         for name, v in out.items():
             w.writerow([name] + [v.get(k, "") for k in extra_cols] + [v["nm"], v["km"], v["hours"], v["days"]])
-    print(f"\nSaved to {a.out} and {out_csv}")
+    print(f"\nSaved to {out_csv}" + (f" and {a.out}" if a.out.lower().endswith(".json") else ""))
 
 
 if __name__ == "__main__":

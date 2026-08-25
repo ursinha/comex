@@ -21,8 +21,7 @@ Usage:
   python3 scripts/comexstat.py --ncm 27090010 --year 2025 --flow export --by urf
   python3 scripts/comexstat.py --ncm 27090010 --year 2025 --flow export --by via
 
-Output: CSV (default data/comexstat_<ncm|all>_<year>_<flow>_<by>.csv) and a
-ranking printed to the terminal. For --by hs6 the description shown is that of
+Output: a ranking printed to the terminal and, with --out, a CSV. For --by hs6 the description shown is that of
 the largest NCM line within each HS6 group.
 """
 import argparse
@@ -67,7 +66,7 @@ def main():
                          "6 digits; urf = customs unit (port) of clearance; via = transport mode")
     ap.add_argument("--country", default=None, help="MDIC numeric country code to filter by")
     ap.add_argument("--top", type=int, default=15, help="rows to print")
-    ap.add_argument("--out", default=None, help="output CSV path")
+    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
     a = ap.parse_args()
 
     if a.by in ("state", "country", "urf", "via") and not a.ncm:
@@ -100,13 +99,13 @@ def main():
 
     items.sort(key=lambda t: -t[2])
     total = sum(t[2] for t in items)
-    out = a.out or f"data/comexstat_{a.ncm or 'all'}_{a.year}_{a.flow}_{a.by}.csv"
-    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    with open(out, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow([a.by, "description", "fob_usd"])
-        for k, label, v in items:
-            w.writerow([k, label, f"{v:.0f}"])
+    if a.out:
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+        with open(a.out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow([a.by, "description", "fob_usd"])
+            for k, label, v in items:
+                w.writerow([k, label, f"{v:.0f}"])
 
     label = "exports" if a.flow == "export" else "imports"
     print(f"Brazil — {label}" + (f" of NCM {a.ncm}" if a.ncm else "") + f" in {a.year} by {a.by}"
@@ -118,7 +117,8 @@ def main():
     for i, (k, desc, v) in enumerate(items[: a.top], 1):
         line = f"{i:<4}" + (f"{k:<10}" if wide else "") + f"{desc[:42]:<44}"
         print(line + f"{v/1000:>16,.1f}{100*v/total:>6.1f}%")
-    print(f"\nSaved to {out}")
+    if a.out:
+        print(f"\nSaved to {a.out}")
 
 
 if __name__ == "__main__":

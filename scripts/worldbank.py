@@ -13,8 +13,9 @@ Usage:
   python3 scripts/worldbank.py --countries BRA --indicator SP.POP.TOTL --years 2020:2025 \
       --out data/population.csv
 
-Output: CSV with columns country,iso3,year,value (raw API JSON saved alongside)
-and a table printed to the terminal. Missing values are reported as empty.
+Output: a table printed to the terminal; with --out, a CSV with columns
+country,iso3,year,value (raw API JSON saved alongside). Missing values are
+reported as empty.
 """
 import argparse
 import csv
@@ -31,7 +32,7 @@ def main():
     ap.add_argument("--indicator", default="NY.GDP.MKTP.CD",
                     help="indicator code (default NY.GDP.MKTP.CD = GDP, current US$)")
     ap.add_argument("--years", required=True, help="year or range, e.g. 2025 or 2020:2025")
-    ap.add_argument("--out", default=None, help="output CSV path (default data/wb_<indicator>.csv)")
+    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
     ap.add_argument("--sort", default="given", choices=["given", "value", "name"],
                     help="row order: as given in --countries (default), by value (largest first) "
                          "or by country name")
@@ -46,9 +47,9 @@ def main():
     if len(payload) < 2 or not payload[1]:
         raise SystemExit(f"No data returned: {payload[0] if payload else payload}")
 
-    out = a.out or f"data/wb_{a.indicator}.csv"
-    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    json.dump(payload, open(out.rsplit(".", 1)[0] + "_raw.json", "w"))
+    if a.out:
+        os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+        json.dump(payload, open(a.out.rsplit(".", 1)[0] + "_raw.json", "w"))
 
     if a.sort == "value":
         rows = sorted(payload[1], key=lambda r: (r["date"], -(r["value"] or 0)))
@@ -57,19 +58,21 @@ def main():
     else:
         order = {c: i for i, c in enumerate(codes.split(";"))}
         rows = sorted(payload[1], key=lambda r: (r["date"], order.get(r["countryiso3code"], 999)))
-    with open(out, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["country", "iso3", "year", "value"])
-        for r in rows:
-            w.writerow([r["country"]["value"], r["countryiso3code"], r["date"],
-                        "" if r["value"] is None else r["value"]])
+    if a.out:
+        with open(a.out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["country", "iso3", "year", "value"])
+            for r in rows:
+                w.writerow([r["country"]["value"], r["countryiso3code"], r["date"],
+                            "" if r["value"] is None else r["value"]])
 
     print(f"{a.indicator} — {len(rows)} rows\n")
     print(f"{'Country':<28}{'ISO3':<6}{'Year':<6}{'Value':>22}")
     for r in rows:
         v = "" if r["value"] is None else f"{r['value']:,.0f}"
         print(f"{r['country']['value']:<28}{r['countryiso3code']:<6}{r['date']:<6}{v:>22}")
-    print(f"\nSaved to {out}")
+    if a.out:
+        print(f"\nSaved to {a.out}")
 
 
 if __name__ == "__main__":

@@ -70,7 +70,7 @@ def main():
                     help="comma-separated ISO3 codes to compare with the base country (not needed with --list)")
     ap.add_argument("--resolutions", default="",
                     help="comma-separated resolution symbols to highlight (optional)")
-    ap.add_argument("--out", default=None, help="output CSV path (with --list: the listed resolutions)")
+    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
     ap.add_argument("--list", action="store_true",
                     help="only list the resolutions voted in the year (or range) and exit")
     ap.add_argument("--filter", default="",
@@ -115,38 +115,42 @@ def main():
     if len(years) > 1 and highlights:
         # Votes of every country on the highlighted resolutions, across the whole range
         all_votes = {res: vv for y in years for res, vv in by_year[y].items()}
-        out = a.out or f"data/unga_votes_{years[0]}_{years[-1]}.csv"
         print("Votes on highlighted resolutions (Y=yes, N=no, A=abstention, -=absent):")
         print(f"{'resolution':<18}{'date':<12}" + "".join(f"{c:>5}" for c in countries))
-        with open(out, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["resolution", "date", "title"] + countries
-                       + [f"same_as_{base}_{c}" for c in others])
-            for res in highlights:
-                vv = all_votes.get(res, {})
-                date, title = titles.get(res, ("", ""))
-                print(f"{res:<18}{date:<12}" + "".join(f"{vv.get(c, '-'):>5}" for c in countries)
-                      + f"   {title[:50]}")
-                w.writerow([res, date, title] + [vv.get(c, "-") for c in countries]
-                           + [int(vv.get(c, "-") == vv.get(base, "-")) for c in others])
-        print(f"\nSaved to {out}")
+        table = []
+        for res in highlights:
+            vv = all_votes.get(res, {})
+            date, title = titles.get(res, ("", ""))
+            print(f"{res:<18}{date:<12}" + "".join(f"{vv.get(c, '-'):>5}" for c in countries)
+                  + f"   {title[:50]}")
+            table.append([res, date, title] + [vv.get(c, "-") for c in countries]
+                         + [int(vv.get(c, "-") == vv.get(base, "-")) for c in others])
+        if a.out:
+            with open(a.out, "w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["resolution", "date", "title"] + countries
+                           + [f"same_as_{base}_{c}" for c in others])
+                w.writerows(table)
+            print(f"\nSaved to {a.out}")
         return
 
     if len(years) > 1:
         # Time series of aggregate similarity: one row per year, one column per country
-        out = a.out or f"data/unga_similarity_{years[0]}_{years[-1]}.csv"
-        with open(out, "w", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(["year", "resolutions"] + others)
-            print(f"{'year':<6}{'n':>5}" + "".join(f"{c:>8}" for c in others))
-            for y in years:
-                vv_all = by_year[y]
-                n = len(vv_all)
-                sims = [sum(1 for vv in vv_all.values() if vv.get(base, "-") == vv.get(c, "-")) / n
-                        if n else float("nan") for c in others]
-                w.writerow([y, n] + [round(s, 3) for s in sims])
-                print(f"{y:<6}{n:>5}" + "".join(f"{s:>8.3f}" for s in sims))
-        print(f"\nSaved to {out}")
+        table = []
+        print(f"{'year':<6}{'n':>5}" + "".join(f"{c:>8}" for c in others))
+        for y in years:
+            vv_all = by_year[y]
+            n = len(vv_all)
+            sims = [sum(1 for vv in vv_all.values() if vv.get(base, "-") == vv.get(c, "-")) / n
+                    if n else float("nan") for c in others]
+            table.append([y, n] + [round(s, 3) for s in sims])
+            print(f"{y:<6}{n:>5}" + "".join(f"{s:>8.3f}" for s in sims))
+        if a.out:
+            with open(a.out, "w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["year", "resolutions"] + others)
+                w.writerows(table)
+            print(f"\nSaved to {a.out}")
         return
 
     votes = by_year[years[0]]
@@ -170,15 +174,15 @@ def main():
             print(f"{res:<18}" + "".join(f"{vv.get(c, '-'):>5}" for c in countries)
                   + f"   {titles.get(res, ('', ''))[1][:60]}")
 
-    out = a.out or f"data/unga_votes_{a.year}.csv"
-    with open(out, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["country"] + highlights + [f"aggregate_similarity_{a.year}"])
-        for c in countries:
-            row = [c] + [votes.get(r, {}).get(c, "-") for r in highlights]
-            row.append("" if c == base else round(agg[c], 3))
-            w.writerow(row)
-    print(f"\nSaved to {out}")
+    if a.out:
+        with open(a.out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["country"] + highlights + [f"aggregate_similarity_{a.year}"])
+            for c in countries:
+                row = [c] + [votes.get(r, {}).get(c, "-") for r in highlights]
+                row.append("" if c == base else round(agg[c], 3))
+                w.writerow(row)
+        print(f"\nSaved to {a.out}")
 
 
 if __name__ == "__main__":
