@@ -30,10 +30,12 @@ Usage:
   reporter list is downloaded from the API on first run and cached in
   <out-dir>/comtrade_reporters.json.
 
-Output: <out-dir>/comtrade_<hs>_<year>_<country>_<flow>.json (raw response,
-default out-dir data/) and a partner ranking printed to the terminal.
+Output: <out-dir>/comtrade_<hs>_<year>_<country>_<flow>.json (raw response)
+and .csv (rank, partner, iso3, value_usd, share, and mode of transport when
+--mode is given), default out-dir data/; the ranking is also printed.
 """
 import argparse
+import csv
 import json
 import os
 import sys
@@ -204,16 +206,26 @@ def main():
     shown = rows[: a.top]
     print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}"
           + ("   mode of transport" if a.mode else ""))
+    csv_rows = []
     for i, r in enumerate(shown, 1):
         v = r["primaryValue"]
         name = r.get("partnerDesc") or r.get("partnerISO", "?")
         line = f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%"
+        mode_txt = ""
         if a.mode:
             if i > 1:
                 time.sleep(a.pause)
             modes, mtotal = mode_breakdown(code, a.year, a.hs, a.flow, r["partnerCode"], key)
-            line += "   " + mode_line(modes, mtotal or v)
+            mode_txt = mode_line(modes, mtotal or v)
+            line += "   " + mode_txt
         print(line)
+        csv_rows.append([i, name, r.get("partnerISO", ""), f"{v:.0f}", f"{v/total:.4f}", mode_txt])
+    out_csv = out.rsplit(".", 1)[0] + ".csv"
+    with open(out_csv, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["rank", "partner", "iso3", "value_usd", "share", "mode_of_transport"])
+        w.writerows(csv_rows)
+    print(f"\nSaved to {out_csv}")
 
 
 if __name__ == "__main__":

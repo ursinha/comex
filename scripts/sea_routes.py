@@ -17,7 +17,8 @@ Usage:
       --speed 16 --out data/sea_routes.json
 
 Output: JSON keyed by destination port name with nautical miles, km, hours
-and days at the given speed; a summary is printed to the terminal.
+and days at the given speed, plus a CSV with the same data (one row per
+port); a summary is printed to the terminal.
 """
 import argparse
 import csv
@@ -56,7 +57,13 @@ def main():
 
     with open(a.out, "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
-    print(f"\nSaved to {a.out}")
+    out_csv = a.out.rsplit(".", 1)[0] + ".csv"
+    with open(out_csv, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["port", "nm", "km", "hours", "days"])
+        for name, v in out.items():
+            w.writerow([name, v["nm"], v["km"], v["hours"], v["days"]])
+    print(f"\nSaved to {a.out} and {out_csv}")
 
 
 if __name__ == "__main__":
