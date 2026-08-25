@@ -4,7 +4,9 @@
 Data source: UN Digital Library (Dag Hammarskjöld Library) — official dataset
 of all UNGA recorded (roll-call) votes since 1946.
   Record: https://digitallibrary.un.org/record/4060887
-  Download the CSV file listed there (~360 MB) and pass its path with --csv.
+  The CSV (~360 MB) is downloaded automatically to --csv (default
+  data/un_ga_voting.csv) when the file does not exist: the script reads the
+  record page, finds the current CSV attachment and fetches it.
 
 Vote codes in the dataset: Y (yes), N (no), A (abstention), empty = absent.
 Two countries "vote together" on a resolution when their codes are identical
@@ -22,12 +24,39 @@ Output CSV: one row per country with its vote on each highlighted resolution
 """
 import argparse
 import csv
+import os
+import re
+import sys
+import urllib.request
 from collections import defaultdict
+
+RECORD_URL = "https://digitallibrary.un.org/record/4060887"
+UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) comex-tools/1.0"}
+
+
+def ensure_csv(path):
+    """Download the UN voting CSV from the Digital Library record if missing."""
+    if os.path.exists(path):
+        return
+    print(f"{path} not found: locating the CSV on {RECORD_URL} ...", file=sys.stderr)
+    html = urllib.request.urlopen(urllib.request.Request(RECORD_URL, headers=UA), timeout=60).read().decode()
+    m = re.search(r'href="(/record/4060887/files/[^"]+\.csv)"', html)
+    if not m:
+        sys.exit("could not find a .csv attachment on the record page; download it manually")
+    url = "https://digitallibrary.un.org" + m[1]
+    print(f"downloading {url} (~360 MB) ...", file=sys.stderr)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=600) as r, \
+            open(path, "wb") as f:
+        while chunk := r.read(1 << 20):
+            f.write(chunk)
+    print(f"saved to {path}", file=sys.stderr)
 
 
 def main():
     ap = argparse.ArgumentParser(description="UNGA voting similarity")
-    ap.add_argument("--csv", required=True, help="path to the UN Digital Library voting CSV")
+    ap.add_argument("--csv", default="data/un_ga_voting.csv",
+                    help="path to the UN voting CSV (downloaded if missing; default data/un_ga_voting.csv)")
     ap.add_argument("--year", required=True, help="year to analyse (e.g. 2025)")
     ap.add_argument("--base", default="BRA", help="base country ISO3 (default BRA)")
     ap.add_argument("--countries", required=True,
@@ -43,6 +72,7 @@ def main():
     countries = [a.base.upper()] + others
     highlights = [r.strip() for r in a.resolutions.split(",") if r.strip()]
 
+    ensure_csv(a.csv)
     votes = defaultdict(dict)   # resolution -> {country: vote}
     titles = {}
     with open(a.csv, newline="") as f:

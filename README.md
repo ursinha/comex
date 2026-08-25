@@ -62,10 +62,9 @@ python3 scripts/main_ports.py --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports
 .venv/bin/python scripts/sea_routes.py --ports data/ports.csv --origin Santos --speed 16
 
 # UNGA voting similarity in 2025 between Brazil and three other countries
-# (download the CSV from the UN Digital Library record first)
-python3 scripts/unga_votes.py --csv data/un_ga_voting.csv --year 2025 \
-    --base BRA --countries ARG,CHL,URY --resolutions A/RES/ES-11/7
-python3 scripts/unga_votes.py --csv data/un_ga_voting.csv --year 2025 --base BRA --countries ARG --list
+# (the ~360 MB voting CSV is downloaded from the UN Digital Library on first run)
+python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG,CHL,URY --resolutions A/RES/ES-11/7
+python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG --list
 ```
 
 Every script accepts `-h` for the full list of options. Outputs go to `data/`
