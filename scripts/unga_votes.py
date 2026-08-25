@@ -62,14 +62,18 @@ def main():
                     help="path to the UN voting CSV (downloaded if missing; default data/un_ga_voting.csv)")
     ap.add_argument("--year", required=True, help="year (e.g. 2025) or range (e.g. 1988:2025)")
     ap.add_argument("--base", default="BRA", help="base country ISO3 (default BRA)")
-    ap.add_argument("--countries", required=True,
-                    help="comma-separated ISO3 codes to compare with the base country")
+    ap.add_argument("--countries", default="",
+                    help="comma-separated ISO3 codes to compare with the base country (not needed with --list)")
     ap.add_argument("--resolutions", default="",
                     help="comma-separated resolution symbols to highlight (optional)")
     ap.add_argument("--out", default=None, help="output CSV path")
     ap.add_argument("--list", action="store_true",
-                    help="only list the resolutions voted in the year and exit")
+                    help="only list the resolutions voted in the year (or range) and exit")
+    ap.add_argument("--filter", default="",
+                    help="with --list: show only titles containing this text (case-insensitive)")
     a = ap.parse_args()
+    if not a.list and not a.countries:
+        ap.error("--countries is required unless --list is given")
 
     others = [c.strip().upper() for c in a.countries.split(",") if c.strip()]
     countries = [a.base.upper()] + others
@@ -88,6 +92,16 @@ def main():
             titles.setdefault(r["resolution"], (r["date"], r["title"]))
             if r["ms_code"] in countries:
                 by_year[y][r["resolution"]][r["ms_code"]] = r["ms_vote"] or "-"
+
+    if a.list:
+        shown = 0
+        for res, (date, title) in sorted(titles.items(), key=lambda x: x[1][0]):
+            if a.filter and a.filter.lower() not in title.lower():
+                continue
+            print(f"{date}  {res:<18} {title[:100]}")
+            shown += 1
+        print(f"\n{shown} of {len(titles)} resolutions with recorded votes in {a.year}")
+        return
 
     base = a.base.upper()
     if len(years) > 1:
@@ -109,11 +123,6 @@ def main():
 
     votes = by_year[years[0]]
 
-    if a.list:
-        for res, (date, title) in sorted(titles.items(), key=lambda x: x[1][0]):
-            print(f"{date}  {res:<18} {title[:100]}")
-        print(f"\n{len(titles)} resolutions with recorded votes in {a.year}")
-        return
 
     agg = {}
     for c in others:

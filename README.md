@@ -64,7 +64,7 @@ python3 scripts/main_ports.py --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports
 # UNGA voting similarity in 2025 between Brazil and three other countries
 # (the ~360 MB voting CSV is downloaded from the UN Digital Library on first run)
 python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG,CHL,URY --resolutions A/RES/ES-11/7
-python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG --list
+python3 scripts/unga_votes.py --year 2022:2025 --list --filter Ukraine   # find resolution symbols
 ```
 
 Every script accepts `-h` for the full list of options. Outputs go to `data/`
