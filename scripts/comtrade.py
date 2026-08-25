@@ -28,7 +28,10 @@ Usage:
 
   --country accepts an M49 numeric code (76 = Brazil) or ISO3 (BRA); the
   reporter list is downloaded from the API on first run and cached in
-  <out-dir>/comtrade_reporters.json.
+  <out-dir>/comtrade_reporters.json. --country ALL flips the question: it
+  ranks every reporting country by its trade of the product with the world
+  (e.g. the world's exporters of HS 020230):
+  python3 scripts/comtrade.py --hs 020230 --year 2025 --country ALL --flow X --top 15
 
 Output: <out-dir>/comtrade_<hs>_<year>_<country>_<flow>.json (raw response)
 and .csv (rank, partner, iso3, value_usd, share, and mode of transport when
@@ -157,11 +160,46 @@ def mode_line(modes, total):
     return " · ".join(f"{k} {100*v/total:.1f}%" for k, v in parts if v / total >= 0.0005)
 
 
+def world_ranking(a, key):
+    """--country ALL: every reporter's trade of the product with the world, ranked."""
+    d = query({"reporterCode": "", "period": a.year, "cmdCode": a.hs, "flowCode": a.flow,
+               "partnerCode": 0, "partner2Code": 0, "motCode": 0, "customsCode": "C00",
+               "includeDesc": "true"}, key)
+    out = os.path.join(a.out_dir, f"comtrade_{a.hs}_{a.year}_ALL_{a.flow}.json")
+    json.dump(d, open(out, "w"))
+    rows = [r for r in d.get("data", []) if r.get("primaryValue")]
+    if not rows:
+        sys.exit(f"No data for HS {a.hs}, {a.year}, flow {a.flow}.")
+    if d.get("count") == 500:
+        print("warning: 500 rows returned, the public endpoint may have truncated the list",
+              file=sys.stderr)
+    rows.sort(key=lambda r: -r["primaryValue"])
+    total = sum(r["primaryValue"] for r in rows)
+    flow_name = "exporters" if a.flow == "X" else "importers"
+    print(f"World {flow_name} of HS {a.hs} in {a.year} (reporting countries)")
+    print(f"Product: {rows[0].get('cmdDesc', '')}")
+    print(f"Sum of reported values: US$ {total:,.0f} | {len(rows)} reporters | raw: {out}\n")
+    print(f"{'#':<4}{'Country':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}")
+    csv_rows = []
+    for i, r in enumerate(rows[: a.top], 1):
+        v = r["primaryValue"]
+        name = r.get("reporterDesc") or r.get("reporterISO", "?")
+        print(f"{i:<4}{name:<32}{r.get('reporterISO', '?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%")
+        csv_rows.append([i, name, r.get("reporterISO", ""), f"{v:.0f}", f"{v/total:.4f}"])
+    out_csv = out.rsplit(".", 1)[0] + ".csv"
+    with open(out_csv, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["rank", "country", "iso3", "value_usd", "share_of_reported"])
+        w.writerows(csv_rows)
+    print(f"\nSaved to {out_csv}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Annual trade by partner (UN Comtrade)")
     ap.add_argument("--hs", required=True, help="6-digit HS product code (e.g. 100590)")
     ap.add_argument("--year", required=True, help="year (e.g. 2025)")
-    ap.add_argument("--country", default="BRA", help="reporter country: ISO3 or M49 (default BRA)")
+    ap.add_argument("--country", default="BRA",
+                    help="reporter country: ISO3 or M49 (default BRA); ALL ranks all reporters vs the world")
     ap.add_argument("--flow", default="X", choices=["X", "M"],
                     help="X = exports, M = imports (default X)")
     ap.add_argument("--top", type=int, default=15, help="how many partners to list")
@@ -176,6 +214,8 @@ def main():
 
     key = get_key(a.key)
     os.makedirs(a.out_dir, exist_ok=True)
+    if a.country.upper() == "ALL":
+        return world_ranking(a, key)
     code, iso3 = resolve_country(a.country, a.out_dir)
     partner_code = resolve_partner(a.partner, a.out_dir)[0] if a.partner else ""
     d = query({"reporterCode": code, "period": a.year, "cmdCode": a.hs,

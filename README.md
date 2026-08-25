@@ -40,6 +40,9 @@ python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top
 python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --top 10 --mode
 python3 scripts/comtrade.py --hs 100590 --year 2025 --country BRA --flow X --partner ARG --mode
 
+# The world's exporters of a product (every reporting country vs the world)
+python3 scripts/comtrade.py --hs 090111 --year 2024 --country ALL --flow X --top 15
+
 # Top 10 export products of Argentina in 2024 (any country works)
 python3 scripts/top_products.py --country ARG --year 2024 --flow X --top 10
 
