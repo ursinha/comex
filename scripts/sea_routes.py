@@ -53,12 +53,15 @@ def main():
     for name, coord in ports.items():
         if name == a.origin:
             continue
-        route = sr.searoute(origin, coord, units="nm")
-        nm = route["properties"]["length"]
+        # NB: searoute's unit code for nautical miles is "naut" ("nm" is silently
+        # misread); ask for km and derive nautical miles ourselves.
+        route = sr.searoute(origin, coord, units="km")
+        km = route["properties"]["length"]
+        nm = km / NM_TO_KM
         hours = nm / a.speed
-        out[name] = {**extra.get(name, {}), "nm": round(nm), "km": round(nm * NM_TO_KM),
+        out[name] = {**extra.get(name, {}), "nm": round(nm), "km": round(km),
                      "hours": round(hours), "days": round(hours / 24, 1)}
-        print(f"{name:<28} {nm:>8,.0f} nm  {nm*NM_TO_KM:>9,.0f} km  ~{hours/24:>5.1f} days")
+        print(f"{name:<28} {nm:>8,.0f} nm  {km:>9,.0f} km  ~{hours/24:>5.1f} days")
 
     if not a.out:
         return
