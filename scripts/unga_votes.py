@@ -20,6 +20,10 @@ Usage:
   # a range of years gives a time series of aggregate similarity (one column
   # per country, one row per year) — e.g. to see how alignment shifted:
   python3 scripts/unga_votes.py --year 1988:2025 --base BRA --countries USA,CHN,RUS --out data/unga_series.csv
+  # a range with --resolutions gives every country's vote on those resolutions
+  # (whatever their year) plus a 0/1 "same as base" column per country:
+  python3 scripts/unga_votes.py --year 2022:2025 --base BRA --countries USA,CHN \
+      --resolutions A/RES/ES-11/1,A/RES/ES-11/7 --out data/unga_key_votes.csv
 
 Output CSV: one row per country with its vote on each highlighted resolution
 (if any) and the aggregate similarity with the base country over the year
@@ -104,6 +108,26 @@ def main():
         return
 
     base = a.base.upper()
+    if len(years) > 1 and highlights:
+        # Votes of every country on the highlighted resolutions, across the whole range
+        all_votes = {res: vv for y in years for res, vv in by_year[y].items()}
+        out = a.out or f"data/unga_votes_{years[0]}_{years[-1]}.csv"
+        print("Votes on highlighted resolutions (Y=yes, N=no, A=abstention, -=absent):")
+        print(f"{'resolution':<18}{'date':<12}" + "".join(f"{c:>5}" for c in countries))
+        with open(out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["resolution", "date", "title"] + countries
+                       + [f"same_as_{base}_{c}" for c in others])
+            for res in highlights:
+                vv = all_votes.get(res, {})
+                date, title = titles.get(res, ("", ""))
+                print(f"{res:<18}{date:<12}" + "".join(f"{vv.get(c, '-'):>5}" for c in countries)
+                      + f"   {title[:50]}")
+                w.writerow([res, date, title] + [vv.get(c, "-") for c in countries]
+                           + [int(vv.get(c, "-") == vv.get(base, "-")) for c in others])
+        print(f"\nSaved to {out}")
+        return
+
     if len(years) > 1:
         # Time series of aggregate similarity: one row per year, one column per country
         out = a.out or f"data/unga_similarity_{years[0]}_{years[-1]}.csv"
