@@ -24,6 +24,9 @@ Usage:
   # (whatever their year) plus a 0/1 "same as base" column per country:
   python3 scripts/unga_votes.py --year 2022:2025 --base BRA --countries USA,CHN \
       --resolutions A/RES/ES-11/1,A/RES/ES-11/7 --out data/unga_key_votes.csv
+  # or every resolution of the range (one row each):
+  python3 scripts/unga_votes.py --year 2022:2025 --base BRA --countries USA,CHN \
+      --resolutions ALL --out data/unga_all_votes_2022_2025.csv
 
 Output CSV: one row per country with its vote on each highlighted resolution
 (if any) and the aggregate similarity with the base country over the year
@@ -69,7 +72,8 @@ def main():
     ap.add_argument("--countries", default="",
                     help="comma-separated ISO3 codes to compare with the base country (not needed with --list)")
     ap.add_argument("--resolutions", default="",
-                    help="comma-separated resolution symbols to highlight (optional)")
+                    help="comma-separated resolution symbols to highlight, or ALL for every "
+                         "resolution in the year range (optional)")
     ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
     ap.add_argument("--list", action="store_true",
                     help="only list the resolutions voted in the year (or range) and exit")
@@ -112,6 +116,9 @@ def main():
         return
 
     base = a.base.upper()
+    if highlights == ["ALL"]:
+        # every resolution voted in the year(s), in date order
+        highlights = [res for res, _ in sorted(titles.items(), key=lambda x: x[1][0])]
     if len(years) > 1 and highlights:
         # Votes of every country on the highlighted resolutions, across the whole range
         all_votes = {res: vv for y in years for res, vv in by_year[y].items()}
