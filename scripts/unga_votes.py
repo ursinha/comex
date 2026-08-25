@@ -17,6 +17,9 @@ Usage:
       --base BRA --countries CHN,USA,MEX --out data/unga_votes_2025.csv
   # optionally highlight specific resolutions:
   python3 scripts/unga_votes.py ... --resolutions A/RES/ES-11/7,A/RES/80/4
+  # a range of years gives a time series of aggregate similarity (one column
+  # per country, one row per year) — e.g. to see how alignment shifted:
+  python3 scripts/unga_votes.py --year 1988:2025 --base BRA --countries USA,CHN,RUS --out data/unga_series.csv
 
 Output CSV: one row per country with its vote on each highlighted resolution
 (if any) and the aggregate similarity with the base country over the year
@@ -57,7 +60,7 @@ def main():
     ap = argparse.ArgumentParser(description="UNGA voting similarity")
     ap.add_argument("--csv", default="data/un_ga_voting.csv",
                     help="path to the UN voting CSV (downloaded if missing; default data/un_ga_voting.csv)")
-    ap.add_argument("--year", required=True, help="year to analyse (e.g. 2025)")
+    ap.add_argument("--year", required=True, help="year (e.g. 2025) or range (e.g. 1988:2025)")
     ap.add_argument("--base", default="BRA", help="base country ISO3 (default BRA)")
     ap.add_argument("--countries", required=True,
                     help="comma-separated ISO3 codes to compare with the base country")
@@ -73,15 +76,38 @@ def main():
     highlights = [r.strip() for r in a.resolutions.split(",") if r.strip()]
 
     ensure_csv(a.csv)
-    votes = defaultdict(dict)   # resolution -> {country: vote}
+    y0, y1 = (a.year.split(":") + [None])[:2]
+    years = [str(y) for y in range(int(y0), int(y1 or y0) + 1)]
+    by_year = {y: defaultdict(dict) for y in years}   # year -> resolution -> {country: vote}
     titles = {}
     with open(a.csv, newline="") as f:
         for r in csv.DictReader(f):
-            if not r["date"].startswith(a.year):
+            y = r["date"][:4]
+            if y not in by_year:
                 continue
             titles.setdefault(r["resolution"], (r["date"], r["title"]))
             if r["ms_code"] in countries:
-                votes[r["resolution"]][r["ms_code"]] = r["ms_vote"] or "-"
+                by_year[y][r["resolution"]][r["ms_code"]] = r["ms_vote"] or "-"
+
+    base = a.base.upper()
+    if len(years) > 1:
+        # Time series of aggregate similarity: one row per year, one column per country
+        out = a.out or f"data/unga_similarity_{years[0]}_{years[-1]}.csv"
+        with open(out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["year", "resolutions"] + others)
+            print(f"{'year':<6}{'n':>5}" + "".join(f"{c:>8}" for c in others))
+            for y in years:
+                vv_all = by_year[y]
+                n = len(vv_all)
+                sims = [sum(1 for vv in vv_all.values() if vv.get(base, "-") == vv.get(c, "-")) / n
+                        if n else float("nan") for c in others]
+                w.writerow([y, n] + [round(s, 3) for s in sims])
+                print(f"{y:<6}{n:>5}" + "".join(f"{s:>8.3f}" for s in sims))
+        print(f"\nSaved to {out}")
+        return
+
+    votes = by_year[years[0]]
 
     if a.list:
         for res, (date, title) in sorted(titles.items(), key=lambda x: x[1][0]):
@@ -89,7 +115,6 @@ def main():
         print(f"\n{len(titles)} resolutions with recorded votes in {a.year}")
         return
 
-    base = a.base.upper()
     agg = {}
     for c in others:
         same = sum(1 for vv in votes.values() if vv.get(base, "-") == vv.get(c, "-"))
