@@ -68,13 +68,20 @@ def load_locodes(out_dir):
     return table
 
 
-def iso3_to_iso2(out_dir):
+def partners(out_dir):
     path = os.path.join(out_dir, "comtrade_partners.json")
     if not os.path.exists(path):
         download(PARTNERS_URL, path)
-    return {r["PartnerCodeIsoAlpha3"]: r["PartnerCodeIsoAlpha2"]
-            for r in json.load(open(path))["results"]
-            if r.get("PartnerCodeIsoAlpha3") and r.get("PartnerCodeIsoAlpha2")}
+    return [r for r in json.load(open(path))["results"]
+            if r.get("PartnerCodeIsoAlpha3") and r.get("PartnerCodeIsoAlpha2")]
+
+
+def iso3_to_iso2(out_dir):
+    return {r["PartnerCodeIsoAlpha3"]: r["PartnerCodeIsoAlpha2"] for r in partners(out_dir)}
+
+
+def iso3_to_name(out_dir):
+    return {r["PartnerCodeIsoAlpha3"]: r["PartnerDesc"] for r in partners(out_dir)}
 
 
 def find_col(cols, *needles):
@@ -129,7 +136,7 @@ def main():
     ap.add_argument("--top", type=int, default=1, help="ports to show per country (default 1)")
     ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
     ap.add_argument("--origin", help="UN/LOCODE of the origin port to add to the ports CSV")
-    ap.add_argument("--ports-out", help="write a name,lon,lat,iso3,locode CSV for sea_routes.py")
+    ap.add_argument("--ports-out", help="write a country,iso3,name,locode,lon,lat CSV for sea_routes.py")
     ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
                     help="override the PLSCI choice for a country with a specific port, e.g. "
                          "MEX=MXVER (its PLSCI rank in the country is shown)")
@@ -186,6 +193,7 @@ def main():
                 chosen.append((c3, k, lbl, v))
 
     iso2_to_iso3 = {v: k for k, v in iso3_to_iso2(a.out_dir).items()}
+    names = iso3_to_name(a.out_dir)
     if a.locodes:
         for k in [c.strip().upper() for c in a.locodes.split(",") if c.strip()]:
             r = locodes.get(k)
@@ -223,7 +231,7 @@ def main():
                 coords, src = parse_coords(r2["Coordinates"]), f"UN/LOCODE {k2} ({r2['Name']})"
         short = name.split(",")[-1].strip() if "," in name else name
         if coords:
-            rows_out.append((short, round(coords[0], 3), round(coords[1], 3), c, k))
+            rows_out.append((names.get(c, c), c, short, k, round(coords[0], 3), round(coords[1], 3)))
             print(f"{c:<8}{k:<8}{short[:34]:<36}{coords[0]:>10.3f}{coords[1]:>9.3f}  {src}")
         else:
             print(f"{c:<8}{k:<8}{short[:34]:<36}{'NO COORDINATES — use --set':>19}")
@@ -231,7 +239,7 @@ def main():
     if a.ports_out:
         with open(a.ports_out, "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["name", "lon", "lat", "iso3", "locode"])
+            w.writerow(["country", "iso3", "name", "locode", "lon", "lat"])
             w.writerows(rows_out)
         print(f"\nSaved {len(rows_out)} ports to {a.ports_out}")
 

@@ -9,9 +9,10 @@ https://www.searates.com/distance-time/
 
 Library: https://github.com/genthalili/searoute-py
 
-Input: a CSV with columns `name,lon,lat` listing the ports (extra columns
-such as `iso3` and `locode`, as written by main_ports.py, are carried over to
-the output); the origin is selected by name with --origin.
+Input: a CSV with at least the columns `name,lon,lat` listing the ports;
+any other columns (e.g. `country,iso3,locode` as written by main_ports.py)
+are carried over to the output in the same order. The origin is selected by
+name with --origin.
 
 Usage:
   python3 scripts/sea_routes.py --ports data/ports.csv --origin "Santos" \
@@ -67,10 +68,12 @@ def main():
     out_csv = a.out.rsplit(".", 1)[0] + ".csv"
     with open(out_csv, "w", newline="") as f:
         w = csv.writer(f)
-        extra_cols = [k for k in next(iter(extra.values()), {}) if k]
-        w.writerow(["port"] + extra_cols + ["nm", "km", "hours", "days"])
+        # keep the input column order (minus lon/lat), then the computed values
+        cols = [k for k in rows[0].keys() if k not in ("lon", "lat")]
+        w.writerow(cols + ["nm", "km", "hours", "days"])
         for name, v in out.items():
-            w.writerow([name] + [v.get(k, "") for k in extra_cols] + [v["nm"], v["km"], v["hours"], v["days"]])
+            w.writerow([name if k == "name" else v.get(k, "") for k in cols]
+                       + [v["nm"], v["km"], v["hours"], v["days"]])
     print(f"\nSaved to {out_csv}" + (f" and {a.out}" if a.out.lower().endswith(".json") else ""))
 
 
