@@ -135,7 +135,8 @@ def main():
     ap.add_argument("--countries", help="comma-separated ISO3 codes (with --plsci)")
     ap.add_argument("--top", type=int, default=1, help="ports to show per country (default 1)")
     ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
-    ap.add_argument("--origin", help="UN/LOCODE of the origin port to add to the ports CSV")
+    ap.add_argument("--origin", help="origin port to add to the ports CSV: a UN/LOCODE (BRSSZ) "
+                    "or, with --plsci, an ISO3 country code (BRA) to pick its highest-PLSCI port")
     ap.add_argument("--ports-out", help="write a country,iso3,name,locode,lon,lat CSV for sea_routes.py")
     ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
                     help="override the PLSCI choice for a country with a specific port, e.g. "
@@ -201,8 +202,17 @@ def main():
 
     if a.origin:
         k = a.origin.upper()
+        if len(k) == 3 and a.plsci:
+            # ISO3 given: pick the country's highest-PLSCI port as origin
+            c2 = iso3_to_iso2(a.out_dir).get(k)
+            ports_o = sorted(((v, k2, lbl) for k2, (lbl, v) in plsci.items()
+                              if c2 and k2.startswith(c2)), reverse=True)
+            if not ports_o:
+                sys.exit(f"origin '{a.origin}': no port found in the PLSCI file")
+            v, k, lbl = ports_o[0]
+            print(f"origin {a.origin}: {k} {lbl} (highest PLSCI, {v:.2f})")
         r = locodes.get(k)
-        chosen.insert(0, (iso2_to_iso3.get(k[:2], k[:2]), k, r["Name"] if r else a.origin, None))
+        chosen.insert(0, (iso2_to_iso3.get(k[:2], k[:2]), k, r["Name"] if r else k, None))
 
     print(f"\n{'country':<8}{'locode':<8}{'port':<36}{'lon':>10}{'lat':>9}  source")
     rows_out = []
