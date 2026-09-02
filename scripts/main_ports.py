@@ -5,10 +5,11 @@ coordinates (UN/LOCODE), producing a ports CSV usable by sea_routes.py.
 Sources:
   - UNCTADstat, Port Liner Shipping Connectivity Index (PLSCI), quarterly:
       https://unctadstat.unctad.org/datacentre/dataviewer/US.PLSCI
-    The site offers no documented API: download the bulk file from the page
-    (the "bulk download" button next to "CSV"; it comes as a .7z containing
-    US_PLSCI.csv) and pass it with --plsci (.7z, .zip or the extracted .csv;
-    .7z needs the `7z` command-line tool).
+    The bulk file is downloaded automatically from the UNCTADstat bulk
+    endpoint and cached as <out-dir>/plsci.7z (a .7z containing US_PLSCI.csv);
+    pass --plsci to use a copy you already have (.7z, .zip or extracted .csv).
+    Extracting .7z uses the `7z` command-line tool when it is installed and
+    falls back to the py7zr package otherwise.
     Ports are identified by UN/LOCODE; the port with the highest PLSCI in a
     country is taken as its main port.
   - UN/LOCODE (UNECE), via the open mirror https://github.com/datasets/un-locode
@@ -19,12 +20,12 @@ Sources:
 
 Usage:
   # main port per country from the PLSCI file, and a ports CSV for sea_routes.py
-  python3 scripts/main_ports.py --plsci data/plsci.csv --countries CHN,USA,MEX \
+  python3 scripts/main_ports.py --countries CHN,USA,MEX \
       --origin BRSSZ --ports-out data/ports.csv
   # show the 3 best-connected ports of each country instead of only the first
-  python3 scripts/main_ports.py --plsci data/plsci.csv --countries CHN,USA --top 3
+  python3 scripts/main_ports.py --countries CHN,USA --top 3
   # override the choice for a country (e.g. the main port on the Atlantic coast)
-  python3 scripts/main_ports.py --plsci data/plsci.7z --countries MEX,USA --choose MEX=MXVER
+  python3 scripts/main_ports.py --countries MEX,USA --choose MEX=MXVER
   # only look up coordinates for a list of UN/LOCODEs (no PLSCI needed)
   python3 scripts/main_ports.py --locodes BRSSZ,CNSHG,USNYC --ports-out data/ports.csv
 """
@@ -38,6 +39,7 @@ import urllib.request
 
 LOCODE_URL = "https://raw.githubusercontent.com/datasets/un-locode/main/data/code-list.csv"
 PARTNERS_URL = "https://comtradeapi.un.org/files/v1/app/reference/partnerAreas.json"
+PLSCI_URL = "https://unctadstat-api.unctad.org/bulkdownload/US.PLSCI/US_PLSCI"
 
 
 def download(url, path):
@@ -66,6 +68,19 @@ def load_locodes(out_dir):
         for r in csv.DictReader(f):
             table[r["Country"] + r["Location"]] = r
     return table
+
+
+def fetch_plsci(out_dir):
+    """Download the PLSCI bulk .7z from UNCTADstat, caching it in out_dir.
+
+    The endpoint answers 403 to urllib's default User-Agent; download() already
+    sends one, so it works through that helper.
+    """
+    path = os.path.join(out_dir, "plsci.7z")
+    if not os.path.exists(path):
+        print("downloading UNCTAD PLSCI bulk file...", file=sys.stderr)
+        download(PLSCI_URL, path)
+    return path
 
 
 def partners(out_dir):
@@ -99,8 +114,23 @@ def open_plsci(path):
         name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
         return io.TextIOWrapper(z.open(name), encoding="utf-8-sig", newline="")
     if path.lower().endswith(".7z"):
-        out = subprocess.run(["7z", "e", "-so", path], capture_output=True, check=True).stdout
-        return io.StringIO(out.decode("utf-8-sig"))
+        try:
+            out = subprocess.run(["7z", "e", "-so", path],
+                                 capture_output=True, check=True).stdout
+            return io.StringIO(out.decode("utf-8-sig"))
+        except (OSError, subprocess.CalledProcessError):
+            pass          # no `7z` binary (common on Windows): use py7zr
+        try:
+            import py7zr
+        except ImportError:
+            sys.exit(f"extracting {path} needs the `7z` command-line tool "
+                     f"or `pip install py7zr`")
+        import tempfile
+        with py7zr.SevenZipFile(path, "r") as z:
+            name = next(n for n in z.getnames() if n.lower().endswith(".csv"))
+            tmp = tempfile.mkdtemp(prefix="plsci-")
+            z.extractall(path=tmp)
+        return open(os.path.join(tmp, name), newline="", encoding="utf-8-sig")
     return open(path, newline="", encoding="utf-8-sig")
 
 
@@ -145,30 +175,31 @@ def main():
         epilog=(
             "examples:\n"
             "  # the three best-connected ports of each country, to inspect first\n"
-            "  %(prog)s --plsci data/plsci.7z --dest-countries ARG,CHL,URY --top 3\n"
+            "  %(prog)s --dest-countries ARG,CHL,URY --top 3\n"
             "\n"
             "  # ports CSV with Santos as origin (picked as Brazil's best port)\n"
-            "  %(prog)s --plsci data/plsci.7z --dest-countries ARG,CHL,URY \\\n"
+            "  %(prog)s --dest-countries ARG,CHL,URY \\\n"
             "      --origin BRA --ports-out data/ports.csv\n"
             "\n"
             "  # override one country's pick and one port's coordinates\n"
-            "  %(prog)s --plsci data/plsci.7z --dest-countries MEX,USA --choose MEX=MXVER \\\n"
+            "  %(prog)s --dest-countries MEX,USA --choose MEX=MXVER \\\n"
             "      --set PHMNL=120.95,14.60 --origin BRSSZ --ports-out data/ports.csv\n"
             "\n"
             "  # already know which ports you want? skip the PLSCI file entirely:\n"
             "  # this only fetches their coordinates and writes the ports CSV\n"
             "  %(prog)s --dest-locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv\n"))
     ap.add_argument("--plsci", metavar="FILE",
-                    help="PLSCI file from UNCTADstat: the bulk .7z, a .zip or the extracted .csv")
+                    help="use this PLSCI file instead of downloading: the bulk .7z, "
+                         "a .zip or the extracted .csv")
     ap.add_argument("--dest-countries", "--countries", dest="countries", metavar="ISO3,ISO3,...",
-                    help="destination countries; each gets its highest-PLSCI port (requires --plsci)")
+                    help="destination countries; each gets its highest-PLSCI port")
     ap.add_argument("--top", type=int, default=1, metavar="N",
                     help="show the N best-connected ports of each country instead of only the pick")
     ap.add_argument("--dest-locodes", "--locodes", dest="locodes", metavar="LOCODE,LOCODE,...",
                     help="destination ports given directly by UN/LOCODE: skips the PLSCI choice "
                          "and only looks up their coordinates")
     ap.add_argument("--origin", help="origin port to add to the ports CSV: a UN/LOCODE (BRSSZ) "
-                    "or, with --plsci, an ISO3 country code (BRA) to pick its highest-PLSCI port")
+                    "or, with --dest-countries, an ISO3 code (BRA) to pick its highest-PLSCI port")
     ap.add_argument("--ports-out", metavar="FILE",
                     help="write the resulting ports CSV here (the file sea_routes.py takes as --ports)")
     ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
@@ -188,18 +219,17 @@ def main():
         k, v = item.split("=", 1)
         lon, lat = (float(x) for x in v.split(","))
         overrides[k.upper()] = (lon, lat)
-    if not a.plsci and not a.locodes:
-        ap.error("give --plsci with --dest-countries, or --dest-locodes")
+    if not a.countries and not a.locodes:
+        ap.error("give --dest-countries (the PLSCI file is downloaded "
+                 "automatically) or --dest-locodes")
 
     os.makedirs(a.out_dir, exist_ok=True)
     locodes = load_locodes(a.out_dir)
     chosen = []   # (country, locode, name, plsci or None)
 
-    if a.plsci:
-        if not a.countries:
-            ap.error("--dest-countries is required with --plsci")
+    if a.countries:
         iso2 = iso3_to_iso2(a.out_dir)
-        plsci, period = read_plsci(a.plsci)
+        plsci, period = read_plsci(a.plsci or fetch_plsci(a.out_dir))
         print(f"PLSCI period used: {period}\n")
         for c3 in [c.strip().upper() for c in a.countries.split(",") if c.strip()]:
             c2 = iso2.get(c3)

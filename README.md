@@ -19,7 +19,7 @@ data source in the module docstring.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install searoute   # only needed by sea_routes.py
+.venv/bin/pip install searoute py7zr   # sea_routes.py; py7zr for the PLSCI .7z
 ```
 
 UN Comtrade works without a key (public preview endpoint: 500 unsorted rows
@@ -44,7 +44,7 @@ computes distance and transit time from an origin to every port in that CSV.
    picks, for each requested country, the port with the highest score in the
    latest quarter.
 
-2. Build the ports CSV:
+1. Build the ports CSV:
 
    ```bash
    python3 scripts/main_ports.py --plsci data/plsci.7z \
@@ -60,7 +60,7 @@ computes distance and transit time from an origin to every port in that CSV.
    ISO3=LOCODE` overrides the pick for a country (e.g. a port on a specific
    coast); `--set LOCODE=lon,lat` forces coordinates manually.
 
-3. Compute distances and times:
+2. Compute distances and times:
 
    ```bash
    .venv/bin/python scripts/sea_routes.py --ports data/ports.csv \
@@ -103,7 +103,7 @@ python3 scripts/worldbank.py --countries ARG,CHL,URY --years 2020:2025
 
 # Main port of each country = highest UNCTAD PLSCI (bulk .7z downloaded from
 # the UNCTADstat page), with official UN/LOCODE coordinates, as a ports CSV
-python3 scripts/main_ports.py --plsci data/plsci.7z --dest-countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
+python3 scripts/main_ports.py --dest-countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
 # or just look up coordinates for known UN/LOCODEs
 python3 scripts/main_ports.py --dest-locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
 
