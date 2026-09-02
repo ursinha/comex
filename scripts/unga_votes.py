@@ -64,21 +64,41 @@ def ensure_csv(path):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="UNGA voting similarity")
-    ap.add_argument("--csv", default="data/un_ga_voting.csv",
-                    help="path to the UN voting CSV (downloaded if missing; default data/un_ga_voting.csv)")
-    ap.add_argument("--year", required=True, help="year (e.g. 2025) or range (e.g. 1988:2025)")
-    ap.add_argument("--base", default="BRA", help="base country ISO3 (default BRA)")
-    ap.add_argument("--countries", default="",
-                    help="comma-separated ISO3 codes to compare with the base country (not needed with --list)")
-    ap.add_argument("--resolutions", default="",
-                    help="comma-separated resolution symbols to highlight, or ALL for every "
-                         "resolution in the year range (optional)")
-    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Voting similarity in the UN General Assembly between a base country\n"
+            "and others, from the official roll-call dataset (Dag Hammarskjold\n"
+            "Library; ~360 MB, downloaded automatically on first run). Two\n"
+            "countries vote together when their records match: yes, no,\n"
+            "abstention or absence."),
+        epilog=(
+            "examples:\n"
+            "  # find a resolution's symbol, then get everyone's vote on it\n"
+            "  %(prog)s --year 2022:2025 --list --filter Ukraine\n"
+            "  %(prog)s --year 2025 --base BRA --countries CHN,USA,CHL \\\n"
+            "      --resolutions A/RES/ES-11/7 --out data/unga_votes_2025.csv\n"
+            "\n"
+            "  # yearly similarity series, e.g. to see foreign-policy shifts\n"
+            "  %(prog)s --year 1988:2025 --base BRA --countries USA,CHN,RUS --out data/series.csv\n"))
+    ap.add_argument("--csv", default="data/un_ga_voting.csv", metavar="FILE",
+                    help="the UN voting dataset (auto-downloaded here if missing)")
+    ap.add_argument("--year", required=True, metavar="YYYY[:YYYY]",
+                    help="a year (2025) or an inclusive range (1988:2025); a range gives a "
+                         "similarity series per year, or a votes table with --resolutions")
+    ap.add_argument("--base", default="BRA", metavar="ISO3",
+                    help="country against which similarity is measured (default BRA)")
+    ap.add_argument("--countries", default="", metavar="ISO3,ISO3,...",
+                    help="countries to compare with the base (not needed with --list)")
+    ap.add_argument("--resolutions", default="", metavar="SYMBOL,...|ALL",
+                    help="resolutions to show votes for (A/RES/ES-11/7), or ALL for every "
+                         "resolution in the range; find symbols with --list")
+    ap.add_argument("--out", default=None, metavar="FILE",
+                    help="save as CSV; without this flag the results are only printed")
     ap.add_argument("--list", action="store_true",
-                    help="only list the resolutions voted in the year (or range) and exit")
-    ap.add_argument("--filter", default="",
-                    help="with --list: show only titles containing this text (case-insensitive)")
+                    help="just list the resolutions voted in the period (date, symbol, title)")
+    ap.add_argument("--filter", default="", metavar="TEXT",
+                    help="with --list: only titles containing this text (case-insensitive)")
     a = ap.parse_args()
     if not a.list and not a.countries:
         ap.error("--countries is required unless --list is given")

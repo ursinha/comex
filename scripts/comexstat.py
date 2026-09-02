@@ -56,17 +56,38 @@ def post(body):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Comex Stat (MDIC) trade by state/country")
-    ap.add_argument("--ncm", default=None, help="8-digit NCM code (e.g. 02023000); optional for --by ncm/hs6")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Brazilian official trade statistics (Comex Stat, MDIC), one year at\n"
+            "a time, broken down by --by: Brazilian state of origin, partner\n"
+            "country, product (NCM 8-digit lines, or hs6 to aggregate them to the\n"
+            "6-digit Harmonized System), customs unit of clearance (urf, usually\n"
+            "the port of shipment) or transport mode (via). Values in US$ FOB.\n"
+            "NCM = the HS6 code plus two Mercosur digits (020230 -> 02023000)."),
+        epilog=(
+            "examples:\n"
+            "  # which states export a product, and by which transport mode\n"
+            "  %(prog)s --ncm 02023000 --year 2025 --flow export --by state\n"
+            "  %(prog)s --ncm 02023000 --year 2025 --flow export --by via --country 158\n"
+            "\n"
+            "  # Brazil's top export products (all NCM lines, aggregated to HS6)\n"
+            "  %(prog)s --year 2025 --flow export --by hs6 --top 10\n"
+            "\n"
+            "  # country codes are MDIC's own (158 = Chile, 160 = China)\n"))
+    ap.add_argument("--ncm", default=None, metavar="NCM8",
+                    help="8-digit NCM product code (02023000); optional for --by ncm/hs6")
     ap.add_argument("--year", required=True, help="year (e.g. 2025)")
     ap.add_argument("--flow", default="export", choices=["export", "import"])
     ap.add_argument("--by", default="state",
                     choices=["state", "country", "ncm", "hs6", "urf", "via"],
                     help="breakdown dimension (default state); hs6 aggregates NCM lines to "
                          "6 digits; urf = customs unit (port) of clearance; via = transport mode")
-    ap.add_argument("--country", default=None, help="MDIC numeric country code to filter by")
-    ap.add_argument("--top", type=int, default=15, help="rows to print")
-    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
+    ap.add_argument("--country", default=None, metavar="CODE",
+                    help="filter by partner country, MDIC numeric code (158 = Chile)")
+    ap.add_argument("--top", type=int, default=15, metavar="N", help="rows to print (default 15)")
+    ap.add_argument("--out", default=None, metavar="FILE",
+                    help="save as CSV; without this flag the results are only printed")
     a = ap.parse_args()
 
     if a.by in ("state", "country", "urf", "via") and not a.ncm:

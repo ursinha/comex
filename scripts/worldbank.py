@@ -27,12 +27,26 @@ BASE = "https://api.worldbank.org/v2/country/{codes}/indicator/{indicator}"
 
 
 def main():
-    ap = argparse.ArgumentParser(description="World Bank indicator by country and year")
-    ap.add_argument("--countries", required=True, help="comma-separated ISO3 codes")
-    ap.add_argument("--indicator", default="NY.GDP.MKTP.CD",
-                    help="indicator code (default NY.GDP.MKTP.CD = GDP, current US$)")
-    ap.add_argument("--years", required=True, help="year or range, e.g. 2025 or 2020:2025")
-    ap.add_argument("--out", default=None, help="write the result as CSV to this path (otherwise print only)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Fetch a World Bank indicator (World Development Indicators API) for\n"
+            "a set of countries and years. Default indicator: NY.GDP.MKTP.CD,\n"
+            "GDP in current US dollars. Other useful codes: NY.GDP.PCAP.CD (GDP\n"
+            "per capita), SP.POP.TOTL (population); any WDI code works."),
+        epilog=(
+            "examples:\n"
+            "  %(prog)s --countries CHN,USA,MEX --years 2025\n"
+            "  %(prog)s --countries BRA --indicator SP.POP.TOTL --years 2020:2025 --out data/pop.csv\n"))
+    ap.add_argument("--countries", required=True, metavar="ISO3,ISO3,...",
+                    help="countries to fetch, as ISO3 codes")
+    ap.add_argument("--indicator", default="NY.GDP.MKTP.CD", metavar="CODE",
+                    help="WDI indicator code (default NY.GDP.MKTP.CD = GDP, current US$)")
+    ap.add_argument("--years", required=True, metavar="YYYY[:YYYY]",
+                    help="a year (2025) or an inclusive range (2020:2025)")
+    ap.add_argument("--out", default=None, metavar="FILE",
+                    help="save as CSV (the raw API JSON is saved alongside); "
+                         "without this flag the results are only printed")
     ap.add_argument("--sort", default="given", choices=["given", "value", "name"],
                     help="row order: as given in --countries (default), by value (largest first) "
                          "or by country name")

@@ -30,13 +30,34 @@ NM_TO_KM = 1.852
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Sea-route distances and transit times")
-    ap.add_argument("--ports", required=True, help="CSV with columns name,lon,lat")
-    ap.add_argument("--origin", required=True, help="name of the origin port (as in the CSV)")
-    ap.add_argument("--speed", type=float, default=16.0,
-                    help="service speed in knots (default 16, typical container liner)")
-    ap.add_argument("--out", default=None,
-                    help="write the results to this path: .csv, or .json (a .csv is written alongside); otherwise print only")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Distance and transit time from one origin port to every other port\n"
+            "in a CSV. Distances follow the real shipping lanes (Marnet network,\n"
+            "Eurostat, via the searoute library), so routes bend around continents\n"
+            "and through passages such as Suez, Panama and the Cape of Good Hope.\n"
+            "Time is distance divided by speed: pure sailing time, with no port\n"
+            "calls, waiting or canal transit."),
+        epilog=(
+            "examples:\n"
+            "  # ports.csv as written by main_ports.py\n"
+            "  %(prog)s --ports data/ports.csv --origin Santos --speed 14 --out data/sea_routes.csv\n"
+            "\n"
+            "  # a hand-made CSV works too; only name,lon,lat are required\n"
+            "  printf 'name,lon,lat\\nSantos,-46.32,-23.93\\nRotterdam,4.5,51.92\\n' > /tmp/p.csv\n"
+            "  %(prog)s --ports /tmp/p.csv --origin Santos\n"))
+    ap.add_argument("--ports", required=True, metavar="FILE",
+                    help="CSV of ports with at least name,lon,lat; extra columns "
+                         "(country, iso3, locode) are carried to the output")
+    ap.add_argument("--origin", required=True, metavar="NAME",
+                    help="name of the departure port, exactly as in the CSV")
+    ap.add_argument("--speed", type=float, default=16.0, metavar="KNOTS",
+                    help="sailing speed in knots (default 16; 14 matches the Searates "
+                         "calculator and the 2024 container-fleet average)")
+    ap.add_argument("--out", default=None, metavar="FILE",
+                    help="save the results: .csv, or .json to also get a JSON; "
+                         "without this flag the results are only printed")
     a = ap.parse_args()
 
     with open(a.ports, newline="") as f:

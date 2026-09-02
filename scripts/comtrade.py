@@ -195,21 +195,46 @@ def world_ranking(a, key):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Annual trade by partner (UN Comtrade)")
-    ap.add_argument("--hs", required=True, help="6-digit HS product code (e.g. 100590)")
-    ap.add_argument("--year", required=True, help="year (e.g. 2025)")
-    ap.add_argument("--country", default="BRA",
-                    help="reporter country: ISO3 or M49 (default BRA); ALL ranks all reporters vs the world")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Annual trade of one product (6-digit Harmonized System code) broken\n"
+            "down by partner country, from UN Comtrade. Works without an API key\n"
+            "(public endpoint, rate-limited; the script waits and retries on\n"
+            "HTTP 429). --country ALL flips the question and ranks every\n"
+            "reporting country's trade of the product with the world."),
+        epilog=(
+            "examples:\n"
+            "  # where Brazil's frozen beef went in 2025, with transport mode\n"
+            "  %(prog)s --hs 020230 --year 2025 --country BRA --flow X --top 12 --mode\n"
+            "\n"
+            "  # one partner only\n"
+            "  %(prog)s --hs 020230 --year 2025 --country BRA --flow X --partner CHL --mode\n"
+            "\n"
+            "  # the world's exporters of coffee\n"
+            "  %(prog)s --hs 090111 --year 2024 --country ALL --flow X --top 15\n"))
+    ap.add_argument("--hs", required=True, metavar="HS6",
+                    help="6-digit HS product code (100590 = maize), or TOTAL for all products")
+    ap.add_argument("--year", required=True, metavar="YYYY", help="year (e.g. 2025)")
+    ap.add_argument("--country", default="BRA", metavar="ISO3|M49|ALL",
+                    help="reporting country (default BRA); ALL ranks every reporter vs the world")
     ap.add_argument("--flow", default="X", choices=["X", "M"],
                     help="X = exports, M = imports (default X)")
-    ap.add_argument("--top", type=int, default=15, help="how many partners to list")
-    ap.add_argument("--out-dir", default="data", help="directory for raw JSON output (default data/)")
-    ap.add_argument("--key", default=None, help="Comtrade subscription key (optional)")
-    ap.add_argument("--partner", default=None, help="restrict to one partner (ISO3 or M49)")
+    ap.add_argument("--top", type=int, default=15, metavar="N",
+                    help="how many partners to list (default 15)")
+    ap.add_argument("--out-dir", default="data", metavar="DIR",
+                    help="where raw API responses, the result CSV and cached reference "
+                         "tables are stored (default data/)")
+    ap.add_argument("--key", default=None, metavar="KEY",
+                    help="Comtrade subscription key (premium accounts only); also read from "
+                         "COMTRADE_API_KEY or a .comtrade_key file")
+    ap.add_argument("--partner", default=None, metavar="ISO3|M49",
+                    help="restrict the query to a single partner country")
     ap.add_argument("--mode", action="store_true",
-                    help="add the mode-of-transport breakdown (one extra query per partner)")
-    ap.add_argument("--pause", type=float, default=2.0,
-                    help="seconds between the extra --mode queries (default 2)")
+                    help="add each partner's transport mode (sea/road/rail/air), as reported "
+                         "by the origin country; one extra query per partner")
+    ap.add_argument("--pause", type=float, default=2.0, metavar="SECONDS",
+                    help="pause between the extra --mode queries, to respect the rate limit (default 2)")
     a = ap.parse_args()
 
     key = get_key(a.key)

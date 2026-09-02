@@ -109,16 +109,33 @@ def without_key(code, year, flow, top, out_dir, pause):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Top HS6 products of a country (UN Comtrade)")
-    ap.add_argument("--country", required=True, help="reporter country: ISO3 or M49 code")
-    ap.add_argument("--year", required=True, help="year (e.g. 2025)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "The N most exported (or imported) products of a country in a year,\n"
+            "at the 6-digit Harmonized System level, from UN Comtrade. Without an\n"
+            "API key it walks the HS hierarchy (chapters first, then only the\n"
+            "chapters that can still contain a top-N product), which is exact and\n"
+            "takes a minute or two; with a premium key it is a single query."),
+        epilog=(
+            "examples:\n"
+            "  %(prog)s --country BRA --year 2025 --flow X --top 10\n"
+            "  %(prog)s --country ARG --year 2024 --flow M --top 20\n"))
+    ap.add_argument("--country", required=True, metavar="ISO3|M49",
+                    help="the country whose trade is ranked")
+    ap.add_argument("--year", required=True, metavar="YYYY", help="year (e.g. 2025)")
     ap.add_argument("--flow", default="X", choices=["X", "M"],
                     help="X = exports, M = imports (default X)")
-    ap.add_argument("--top", type=int, default=10, help="how many products (default 10)")
-    ap.add_argument("--out-dir", default="data", help="output directory (default data/)")
-    ap.add_argument("--key", default=None, help="Comtrade subscription key (optional)")
-    ap.add_argument("--pause", type=float, default=3.0,
-                    help="seconds to wait between queries without a key (default 3)")
+    ap.add_argument("--top", type=int, default=10, metavar="N",
+                    help="how many products (default 10)")
+    ap.add_argument("--out-dir", default="data", metavar="DIR",
+                    help="where raw responses, the result CSV and cached reference tables "
+                         "are stored (default data/)")
+    ap.add_argument("--key", default=None, metavar="KEY",
+                    help="Comtrade subscription key (premium accounts only); also read from "
+                         "COMTRADE_API_KEY or a .comtrade_key file")
+    ap.add_argument("--pause", type=float, default=3.0, metavar="SECONDS",
+                    help="pause between keyless queries, to respect the rate limit (default 3)")
     a = ap.parse_args()
 
     key = get_key(a.key)
