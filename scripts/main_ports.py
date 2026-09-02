@@ -155,7 +155,8 @@ def main():
             "  %(prog)s --plsci data/plsci.7z --countries MEX,USA --choose MEX=MXVER \\\n"
             "      --set PHMNL=120.95,14.60 --origin BRSSZ --ports-out data/ports.csv\n"
             "\n"
-            "  # no PLSCI at all: just look up coordinates for known UN/LOCODEs\n"
+            "  # already know which ports you want? skip the PLSCI file entirely:\n"
+            "  # this only fetches their coordinates and writes the ports CSV\n"
             "  %(prog)s --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv\n"))
     ap.add_argument("--plsci", metavar="FILE",
                     help="PLSCI file from UNCTADstat: the bulk .7z, a .zip or the extracted .csv")
