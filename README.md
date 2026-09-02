@@ -29,6 +29,52 @@ premium (paid/institutional) subscribers; if you have one, pass it with
 `--key`, the `COMTRADE_API_KEY` environment variable, or a `.comtrade_key`
 file in the working directory (git-ignored) and the full endpoint is used.
 
+## Sea distances step by step
+
+`main_ports.py` and `sea_routes.py` work as a pipeline: the first decides
+which port represents each country and writes a ports CSV; the second
+computes distance and transit time from an origin to every port in that CSV.
+
+1. Download the UNCTAD PLSCI bulk file (the only manual step):
+   open https://unctadstat.unctad.org/datacentre/dataviewer/US.PLSCI and use
+   the bulk download button next to the CSV one. You get a `.7z` archive
+   containing `US_PLSCI.csv`; save it as `data/plsci.7z` (extracting the .7z
+   requires the `7z` command-line tool, or extract it yourself and pass the
+   .csv). The PLSCI scores ~900 container ports each quarter; the script
+   picks, for each requested country, the port with the highest score in the
+   latest quarter.
+
+2. Build the ports CSV:
+
+   ```bash
+   python3 scripts/main_ports.py --plsci data/plsci.7z \
+       --countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
+   ```
+
+   `--origin` takes the UN/LOCODE of the departure port (BRSSZ = Santos).
+   Coordinates come from the UN/LOCODE table (downloaded automatically from
+   the open mirror at https://github.com/datasets/un-locode); when a port has
+   no coordinates there, the script falls back to another entry of the same
+   city and says so in the output. Useful flags: `--top 3` shows the three
+   best-connected ports per country before you commit to one; `--choose
+   ISO3=LOCODE` overrides the pick for a country (e.g. a port on a specific
+   coast); `--set LOCODE=lon,lat` forces coordinates manually.
+
+3. Compute distances and times:
+
+   ```bash
+   .venv/bin/python scripts/sea_routes.py --ports data/ports.csv \
+       --origin Santos --speed 14 --out data/sea_routes.csv
+   ```
+
+   Distances are shortest paths over the Marnet shipping-lane network
+   (Eurostat) via the `searoute` library, so they follow real corridors and
+   passages (Suez, Panama, Cape of Good Hope). Time is distance divided by
+   the given speed: it is pure sailing time, with no port calls, waiting or
+   canal transit. 14 knots matches the default of the Searates calculator
+   and the observed container-fleet average for 2024 (Clarksons Research);
+   pass another `--speed` to taste.
+
 ## Examples
 
 ```bash
