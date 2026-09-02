@@ -26,8 +26,6 @@ import argparse
 import csv
 import json
 
-import searoute as sr
-
 NM_TO_KM = 1.852
 
 
@@ -48,6 +46,9 @@ def main():
     if a.origin not in ports:
         raise SystemExit(f"origin '{a.origin}' not found in {a.ports}")
     origin = ports[a.origin]
+
+    # imported here so that --help works without the dependency installed
+    import searoute as sr
 
     out = {}
     for name, coord in ports.items():
