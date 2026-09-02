@@ -116,8 +116,12 @@ python3 scripts/unga_votes.py --year 2025 --base BRA --countries ARG,CHL,URY --r
 python3 scripts/unga_votes.py --year 2022:2025 --list --filter Ukraine   # find resolution symbols
 ```
 
-Every script accepts `-h` for the full list of options. Scripts print their
-result; those with `--out` write a CSV only when the flag is given.
-`comtrade.py` and `top_products.py` always keep the raw API responses (and a
-CSV) in `--out-dir` (default `data/`, not versioned here), together with the
-reference tables they cache.
+Every script accepts `-h` for the full list of options.
+
+By default the scripts only print their result; pass `--out somefile.csv` to
+also save it. The two Comtrade scripts (`comtrade.py`, `top_products.py`) are
+the exception: they always save the raw API response plus a result CSV into
+`--out-dir` (default `data/`), because each query is rate-limited and the raw
+response documents where the numbers came from. Reference tables downloaded
+on first use (country codes, HS codes, UN/LOCODE) are cached in the same
+directory. Nothing in `data/` is committed to this repository.
