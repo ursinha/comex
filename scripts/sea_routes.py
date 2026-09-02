@@ -7,6 +7,16 @@ data). Transit time = distance / speed, 1 nm = 1.852 km. The methodology is
 equivalent to the Searates (DP World) distance/time calculator:
 https://www.searates.com/distance-time/
 
+Speed is a premise, not a measurement, and the two usual references differ:
+  - 13 knots is the documented default of the Searates calculator ("if speed
+    is not set, it will be defaulted to 13 knots for sea transport") —
+    https://docs.searates.com/reference/distance/v2/distance-and-transit-time-calculator
+  - 14.0 knots is the 2024 average of the world container fleet
+    (Clarksons Research).
+Pick one and state it: the resulting times differ by about 8%. Either way
+this is pure sailing time — no port calls, waiting or canal transit — so it
+understates real door-to-door transit on any route that transships.
+
 Library: https://github.com/genthalili/searoute-py
 
 Input: a CSV with at least the columns `name,lon,lat` listing the ports;
@@ -53,8 +63,8 @@ def main():
     ap.add_argument("--origin", required=True, metavar="NAME",
                     help="name of the departure port, exactly as in the CSV")
     ap.add_argument("--speed", type=float, default=16.0, metavar="KNOTS",
-                    help="sailing speed in knots (default 16; 14 matches the Searates "
-                         "calculator and the 2024 container-fleet average)")
+                    help="sailing speed in knots (default 16; the Searates calculator "
+                         "defaults to 13, the 2024 container-fleet average is 14)")
     ap.add_argument("--out", default=None, metavar="FILE",
                     help="save the results: .csv, or .json to also get a JSON; "
                          "without this flag the results are only printed")
