@@ -136,7 +136,7 @@ def main():
             "Decide which port represents each country and write a ports CSV\n"
             "(country,iso3,name,locode,lon,lat) ready for sea_routes.py.\n"
             "\n"
-            "For every country in --countries, the port with the highest PLSCI\n"
+            "For every country in --dest-countries, the port with the highest PLSCI\n"
             "(UNCTAD's port connectivity index) in the latest quarter is chosen;\n"
             "coordinates come from the official UN/LOCODE table (fetched\n"
             "automatically). The PLSCI bulk file is the one manual download:\n"
@@ -145,27 +145,28 @@ def main():
         epilog=(
             "examples:\n"
             "  # the three best-connected ports of each country, to inspect first\n"
-            "  %(prog)s --plsci data/plsci.7z --countries ARG,CHL,URY --top 3\n"
+            "  %(prog)s --plsci data/plsci.7z --dest-countries ARG,CHL,URY --top 3\n"
             "\n"
             "  # ports CSV with Santos as origin (picked as Brazil's best port)\n"
-            "  %(prog)s --plsci data/plsci.7z --countries ARG,CHL,URY \\\n"
+            "  %(prog)s --plsci data/plsci.7z --dest-countries ARG,CHL,URY \\\n"
             "      --origin BRA --ports-out data/ports.csv\n"
             "\n"
             "  # override one country's pick and one port's coordinates\n"
-            "  %(prog)s --plsci data/plsci.7z --countries MEX,USA --choose MEX=MXVER \\\n"
+            "  %(prog)s --plsci data/plsci.7z --dest-countries MEX,USA --choose MEX=MXVER \\\n"
             "      --set PHMNL=120.95,14.60 --origin BRSSZ --ports-out data/ports.csv\n"
             "\n"
             "  # already know which ports you want? skip the PLSCI file entirely:\n"
             "  # this only fetches their coordinates and writes the ports CSV\n"
-            "  %(prog)s --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv\n"))
+            "  %(prog)s --dest-locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv\n"))
     ap.add_argument("--plsci", metavar="FILE",
                     help="PLSCI file from UNCTADstat: the bulk .7z, a .zip or the extracted .csv")
-    ap.add_argument("--countries", metavar="ISO3,ISO3,...",
+    ap.add_argument("--dest-countries", "--countries", dest="countries", metavar="ISO3,ISO3,...",
                     help="destination countries; each gets its highest-PLSCI port (requires --plsci)")
     ap.add_argument("--top", type=int, default=1, metavar="N",
                     help="show the N best-connected ports of each country instead of only the pick")
-    ap.add_argument("--locodes", metavar="LOCODE,LOCODE,...",
-                    help="skip the PLSCI choice and just look up coordinates for these ports")
+    ap.add_argument("--dest-locodes", "--locodes", dest="locodes", metavar="LOCODE,LOCODE,...",
+                    help="destination ports given directly by UN/LOCODE: skips the PLSCI choice "
+                         "and only looks up their coordinates")
     ap.add_argument("--origin", help="origin port to add to the ports CSV: a UN/LOCODE (BRSSZ) "
                     "or, with --plsci, an ISO3 country code (BRA) to pick its highest-PLSCI port")
     ap.add_argument("--ports-out", metavar="FILE",
@@ -188,7 +189,7 @@ def main():
         lon, lat = (float(x) for x in v.split(","))
         overrides[k.upper()] = (lon, lat)
     if not a.plsci and not a.locodes:
-        ap.error("give --plsci with --countries, or --locodes")
+        ap.error("give --plsci with --dest-countries, or --dest-locodes")
 
     os.makedirs(a.out_dir, exist_ok=True)
     locodes = load_locodes(a.out_dir)
@@ -196,7 +197,7 @@ def main():
 
     if a.plsci:
         if not a.countries:
-            ap.error("--countries is required with --plsci")
+            ap.error("--dest-countries is required with --plsci")
         iso2 = iso3_to_iso2(a.out_dir)
         plsci, period = read_plsci(a.plsci)
         print(f"PLSCI period used: {period}\n")

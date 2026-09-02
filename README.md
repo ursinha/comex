@@ -48,7 +48,7 @@ computes distance and transit time from an origin to every port in that CSV.
 
    ```bash
    python3 scripts/main_ports.py --plsci data/plsci.7z \
-       --countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
+       --dest-countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
    ```
 
    `--origin` takes the UN/LOCODE of the departure port (BRSSZ = Santos).
@@ -103,9 +103,9 @@ python3 scripts/worldbank.py --countries ARG,CHL,URY --years 2020:2025
 
 # Main port of each country = highest UNCTAD PLSCI (bulk .7z downloaded from
 # the UNCTADstat page), with official UN/LOCODE coordinates, as a ports CSV
-python3 scripts/main_ports.py --plsci data/plsci.7z --countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
+python3 scripts/main_ports.py --plsci data/plsci.7z --dest-countries ARG,CHL,URY --origin BRSSZ --ports-out data/ports.csv
 # or just look up coordinates for known UN/LOCODEs
-python3 scripts/main_ports.py --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
+python3 scripts/main_ports.py --dest-locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv
 
 # Sea routes from a port listed in ports.csv (columns: name,lon,lat), 16 knots
 .venv/bin/python scripts/sea_routes.py --ports data/ports.csv --origin Santos --speed 16 --out data/sea_routes.csv
