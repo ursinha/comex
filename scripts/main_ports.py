@@ -130,20 +130,52 @@ def read_plsci(path):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Main ports (UNCTAD PLSCI) and UN/LOCODE coordinates")
-    ap.add_argument("--plsci", help="UNCTADstat PLSCI file (bulk or CSV download)")
-    ap.add_argument("--countries", help="comma-separated ISO3 codes (with --plsci)")
-    ap.add_argument("--top", type=int, default=1, help="ports to show per country (default 1)")
-    ap.add_argument("--locodes", help="comma-separated UN/LOCODEs to look up (no PLSCI needed)")
+    ap = argparse.ArgumentParser(
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Decide which port represents each country and write a ports CSV\n"
+            "(country,iso3,name,locode,lon,lat) ready for sea_routes.py.\n"
+            "\n"
+            "For every country in --countries, the port with the highest PLSCI\n"
+            "(UNCTAD's port connectivity index) in the latest quarter is chosen;\n"
+            "coordinates come from the official UN/LOCODE table (fetched\n"
+            "automatically). The PLSCI bulk file is the one manual download:\n"
+            "https://unctadstat.unctad.org/datacentre/dataviewer/US.PLSCI\n"
+            "(bulk button; a .7z containing US_PLSCI.csv)."),
+        epilog=(
+            "examples:\n"
+            "  # the three best-connected ports of each country, to inspect first\n"
+            "  %(prog)s --plsci data/plsci.7z --countries ARG,CHL,URY --top 3\n"
+            "\n"
+            "  # ports CSV with Santos as origin (picked as Brazil's best port)\n"
+            "  %(prog)s --plsci data/plsci.7z --countries ARG,CHL,URY \\\n"
+            "      --origin BRA --ports-out data/ports.csv\n"
+            "\n"
+            "  # override one country's pick and one port's coordinates\n"
+            "  %(prog)s --plsci data/plsci.7z --countries MEX,USA --choose MEX=MXVER \\\n"
+            "      --set PHMNL=120.95,14.60 --origin BRSSZ --ports-out data/ports.csv\n"
+            "\n"
+            "  # no PLSCI at all: just look up coordinates for known UN/LOCODEs\n"
+            "  %(prog)s --locodes CNSHA,NLRTM,USNYC --origin BRSSZ --ports-out data/ports.csv\n"))
+    ap.add_argument("--plsci", metavar="FILE",
+                    help="PLSCI file from UNCTADstat: the bulk .7z, a .zip or the extracted .csv")
+    ap.add_argument("--countries", metavar="ISO3,ISO3,...",
+                    help="destination countries; each gets its highest-PLSCI port (requires --plsci)")
+    ap.add_argument("--top", type=int, default=1, metavar="N",
+                    help="show the N best-connected ports of each country instead of only the pick")
+    ap.add_argument("--locodes", metavar="LOCODE,LOCODE,...",
+                    help="skip the PLSCI choice and just look up coordinates for these ports")
     ap.add_argument("--origin", help="origin port to add to the ports CSV: a UN/LOCODE (BRSSZ) "
                     "or, with --plsci, an ISO3 country code (BRA) to pick its highest-PLSCI port")
-    ap.add_argument("--ports-out", help="write a country,iso3,name,locode,lon,lat CSV for sea_routes.py")
+    ap.add_argument("--ports-out", metavar="FILE",
+                    help="write the resulting ports CSV here (the file sea_routes.py takes as --ports)")
     ap.add_argument("--choose", action="append", default=[], metavar="ISO3=LOCODE",
                     help="override the PLSCI choice for a country with a specific port, e.g. "
                          "MEX=MXVER (its PLSCI rank in the country is shown)")
     ap.add_argument("--set", action="append", default=[], metavar="LOCODE=lon,lat",
                     help="manual coordinates for a LOCODE (repeatable), e.g. PHMNL=120.95,14.60")
-    ap.add_argument("--out-dir", default="data")
+    ap.add_argument("--out-dir", default="data", metavar="DIR",
+                    help="where reference tables (UN/LOCODE, country codes) are cached (default data/)")
     a = ap.parse_args()
     chosen_ports = {}
     for item in a.choose:
