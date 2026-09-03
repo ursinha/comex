@@ -247,7 +247,8 @@ def main():
                "flowCode": a.flow, "partnerCode": partner_code, "partner2Code": 0,
                "motCode": 0, "customsCode": "C00", "includeDesc": "true"}, key)
 
-    out = os.path.join(a.out_dir, f"comtrade_{a.hs}_{a.year}_{iso3}_{a.flow}.json")
+    suffix = f"_{a.partner.upper()}" if a.partner else ""
+    out = os.path.join(a.out_dir, f"comtrade_{a.hs}_{a.year}_{iso3}_{a.flow}{suffix}.json")
     json.dump(d, open(out, "w"))
 
     rows = [r for r in d.get("data", []) if r["partnerCode"] != 0 and r.get("primaryValue")]
