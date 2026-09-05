@@ -190,14 +190,15 @@ def world_ranking(a, key):
     print(f"World {flow_name} of HS {a.hs} in {a.year} (reporting countries)")
     print(f"Product: {rows[0].get('cmdDesc', '')}")
     print(f"Sum of reported values: US$ {total:,.0f} | {len(rows)} reporters | raw: {out}\n")
-    print(f"{'#':<4}{'Country':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'US$/kg':>9}")
+    print(f"{'#':<4}{'Country':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'tonnes':>13}{'US$/kg':>9}")
     csv_rows = []
     for i, r in enumerate(rows[: a.top], 1):
         v = r["primaryValue"]
         name = r.get("reporterDesc") or r.get("reporterISO", "?")
         wgt, price = unit_price(r)
+        tonnes = f"{float(wgt)/1000:,.1f}" if wgt else "n/a"
         print(f"{i:<4}{name:<32}{r.get('reporterISO', '?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%"
-              f"{price if price else 'n/a':>9}")
+              f"{tonnes:>13}{price if price else 'n/a':>9}")
         csv_rows.append([i, name, r.get("reporterISO", ""), f"{v:.0f}", wgt, price,
                          f"{v/total:.4f}"])
     out_csv = out.rsplit(".", 1)[0] + ".csv"
@@ -285,15 +286,16 @@ def main():
           f"{len(rows)} partners | raw: {out}\n")
     rows.sort(key=lambda r: -r["primaryValue"])
     shown = rows[: a.top]
-    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'US$/kg':>9}"
+    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'tonnes':>13}{'US$/kg':>9}"
           + ("   mode of transport" if a.mode else ""))
     csv_rows = []
     for i, r in enumerate(shown, 1):
         v = r["primaryValue"]
         name = r.get("partnerDesc") or r.get("partnerISO", "?")
         wgt, price = unit_price(r)
+        tonnes = f"{float(wgt)/1000:,.1f}" if wgt else "n/a"
         line = (f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}"
-                f"{100*v/total:>6.1f}%{price if price else 'n/a':>9}")
+                f"{100*v/total:>6.1f}%{tonnes:>13}{price if price else 'n/a':>9}")
         mode_txt = ""
         if a.mode:
             if i > 1:
