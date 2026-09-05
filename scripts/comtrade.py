@@ -34,8 +34,10 @@ Usage:
   python3 scripts/comtrade.py --hs 020230 --year 2025 --country ALL --flow X --top 15
 
 Output: <out-dir>/comtrade_<hs>_<year>_<country>_<flow>.json (raw response)
-and .csv (rank, partner, iso3, value_usd, share, and mode of transport when
---mode is given), default out-dir data/; the ranking is also printed.
+and .csv (rank, partner, iso3, value_usd, net_weight_kg, price_usd_per_kg,
+share, and mode of transport when --mode is given), default out-dir data/;
+the ranking is also printed. The unit price is value divided by net weight
+(field netWgt), blank when the reporter gives no weight.
 """
 import argparse
 import csv
@@ -160,6 +162,15 @@ def mode_line(modes, total):
     return " · ".join(f"{k} {100*v/total:.1f}%" for k, v in parts if v / total >= 0.0005)
 
 
+def unit_price(row):
+    """Return (net weight in kg, average price in US$/kg) as formatted strings,
+    empty when the record carries no net weight."""
+    w = row.get("netWgt")
+    if not w:
+        return "", ""
+    return f"{w:.0f}", f"{row['primaryValue']/w:.2f}"
+
+
 def world_ranking(a, key):
     """--country ALL: every reporter's trade of the product with the world, ranked."""
     d = query({"reporterCode": "", "period": a.year, "cmdCode": a.hs, "flowCode": a.flow,
@@ -179,17 +190,21 @@ def world_ranking(a, key):
     print(f"World {flow_name} of HS {a.hs} in {a.year} (reporting countries)")
     print(f"Product: {rows[0].get('cmdDesc', '')}")
     print(f"Sum of reported values: US$ {total:,.0f} | {len(rows)} reporters | raw: {out}\n")
-    print(f"{'#':<4}{'Country':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}")
+    print(f"{'#':<4}{'Country':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'US$/kg':>9}")
     csv_rows = []
     for i, r in enumerate(rows[: a.top], 1):
         v = r["primaryValue"]
         name = r.get("reporterDesc") or r.get("reporterISO", "?")
-        print(f"{i:<4}{name:<32}{r.get('reporterISO', '?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%")
-        csv_rows.append([i, name, r.get("reporterISO", ""), f"{v:.0f}", f"{v/total:.4f}"])
+        wgt, price = unit_price(r)
+        print(f"{i:<4}{name:<32}{r.get('reporterISO', '?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%"
+              f"{price if price else 'n/a':>9}")
+        csv_rows.append([i, name, r.get("reporterISO", ""), f"{v:.0f}", wgt, price,
+                         f"{v/total:.4f}"])
     out_csv = out.rsplit(".", 1)[0] + ".csv"
     with open(out_csv, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["rank", "country", "iso3", "value_usd", "share_of_reported"])
+        w.writerow(["rank", "country", "iso3", "value_usd", "net_weight_kg",
+                    "price_usd_per_kg", "share_of_reported"])
         w.writerows(csv_rows)
     print(f"\nSaved to {out_csv}")
 
@@ -270,13 +285,15 @@ def main():
           f"{len(rows)} partners | raw: {out}\n")
     rows.sort(key=lambda r: -r["primaryValue"])
     shown = rows[: a.top]
-    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}"
+    print(f"{'#':<4}{'Partner':<32}{'ISO':<6}{'US$ 1000':>14}{'%':>7}{'US$/kg':>9}"
           + ("   mode of transport" if a.mode else ""))
     csv_rows = []
     for i, r in enumerate(shown, 1):
         v = r["primaryValue"]
         name = r.get("partnerDesc") or r.get("partnerISO", "?")
-        line = f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}{100*v/total:>6.1f}%"
+        wgt, price = unit_price(r)
+        line = (f"{i:<4}{name:<32}{r.get('partnerISO','?'):<6}{v/1000:>14,.1f}"
+                f"{100*v/total:>6.1f}%{price if price else 'n/a':>9}")
         mode_txt = ""
         if a.mode:
             if i > 1:
@@ -285,11 +302,13 @@ def main():
             mode_txt = mode_line(modes, mtotal or v)
             line += "   " + mode_txt
         print(line)
-        csv_rows.append([i, name, r.get("partnerISO", ""), f"{v:.0f}", f"{v/total:.4f}", mode_txt])
+        csv_rows.append([i, name, r.get("partnerISO", ""), f"{v:.0f}", wgt, price,
+                         f"{v/total:.4f}", mode_txt])
     out_csv = out.rsplit(".", 1)[0] + ".csv"
     with open(out_csv, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["rank", "partner", "iso3", "value_usd", "share", "mode_of_transport"])
+        w.writerow(["rank", "partner", "iso3", "value_usd", "net_weight_kg",
+                    "price_usd_per_kg", "share", "mode_of_transport"])
         w.writerows(csv_rows)
     print(f"\nSaved to {out_csv}")
 

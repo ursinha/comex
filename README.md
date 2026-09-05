@@ -7,7 +7,7 @@ data source in the module docstring.
 
 | Script | What it does | Source |
 |---|---|---|
-| `scripts/comtrade.py` | Annual trade of a product (HS6) by partner country, for any reporter country, year and flow (exports/imports); optional mode-of-transport breakdown per partner | [UN Comtrade](https://comtradeplus.un.org) public API |
+| `scripts/comtrade.py` | Annual trade of a product (HS6) by partner country, for any reporter country, year and flow (exports/imports), with the average unit price (US$/kg, from value and net weight); optional mode-of-transport breakdown per partner | [UN Comtrade](https://comtradeplus.un.org) public API |
 | `scripts/top_products.py` | Top N traded products (HS6) of any country, year and flow — single query with an API key, pruned drill-down over the HS hierarchy without one | [UN Comtrade](https://comtradeplus.un.org) |
 | `scripts/comexstat.py` | Brazilian trade broken down by state, partner country, product (NCM or HS6), customs unit (port) or transport mode | [Comex Stat / MDIC](https://comexstat.mdic.gov.br) API |
 | `scripts/worldbank.py` | Any World Bank indicator (GDP by default) for a set of countries and years | [World Bank Indicators API](https://datahelpdesk.worldbank.org/knowledgebase/articles/889392) |
